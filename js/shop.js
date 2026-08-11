@@ -588,7 +588,7 @@ function renderCart(){
       minEl.innerHTML = "Valor mínimo atingido. Já podes finalizar a encomenda.";
     }
   }
-  document.getElementById("pbtn").disabled=cart.length===0 || tot < MIN_ORDER_TOTAL;
+  document.getElementById("pbtn").disabled=cart.length===0;
   var clearBtn = document.getElementById("cart-clear");
   if(clearBtn) clearBtn.disabled = cart.length===0;
   var el=document.getElementById("citems");
@@ -657,15 +657,24 @@ function switchCat(cat){
   refreshCatalogVisibility();
 }
 function openCartPanel(){
-  closeAdmin();
-  closeNotifications();
-  document.getElementById("panel").classList.add("on");
-  document.getElementById("ov").classList.add("on");
+  try{
+    if(typeof closeAdminSettings === "function") closeAdminSettings();
+    if(typeof closeNotifications === "function") closeNotifications();
+    if(document.getElementById("modal-bg")) document.getElementById("modal-bg").classList.remove("on");
+  }catch(e){}
+  var panel = document.getElementById("panel");
+  var ov = document.getElementById("ov");
+  if(panel) panel.classList.add("on");
+  if(ov) ov.classList.add("on");
 }
 function closeCartPanel(){
-  document.getElementById("panel").classList.remove("on");
-  if(!document.getElementById("apanel").classList.contains("on") && !document.getElementById("notif-panel").classList.contains("on")){
-    document.getElementById("ov").classList.remove("on");
+  var panel = document.getElementById("panel");
+  var ov = document.getElementById("ov");
+  if(panel) panel.classList.remove("on");
+  var apanel = document.getElementById("apanel");
+  var notif = document.getElementById("notif-panel");
+  if(ov && !(apanel && apanel.classList.contains("on")) && !(notif && notif.classList.contains("on"))){
+    ov.classList.remove("on");
   }
 }
 function toggleCartPanel(){
@@ -879,9 +888,13 @@ function askConfirm(opts){
 // â”€â”€ FINALIZE / OUTPUT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.getElementById("pbtn").addEventListener("click", function(){
   if(!cart.length) return;
-  var total = cart.reduce(function(s,c){ return s+c.price*c.qty; },0);
-  if(total < MIN_ORDER_TOTAL) return;
   document.getElementById("modal-bg").classList.add("on");
+  var total = cart.reduce(function(s,c){ return s+c.price*c.qty; },0);
+  var st = document.getElementById("send-status");
+  if(st && total < MIN_ORDER_TOTAL){
+    st.textContent = "A encomenda mínima ainda não foi atingida.";
+    st.className = "send-status err";
+  }
 });
 var cartClearBtn = document.getElementById("cart-clear");
 if(cartClearBtn){
@@ -1012,6 +1025,12 @@ window.fetch = function(input, init){
 
 document.getElementById("mo-send").addEventListener("click", function(){
   var m = getOrderMeta();
+  var total = cart.reduce(function(s,c){ return s+c.price*c.qty; },0);
+  if(total < MIN_ORDER_TOTAL){
+    document.getElementById("send-status").textContent = "Faltam " + (MIN_ORDER_TOTAL - total).toFixed(2).replace(".",",") + " € para atingir a encomenda mínima.";
+    document.getElementById("send-status").className = "send-status err";
+    return;
+  }
   if(!m.name){ 
     document.getElementById("send-status").textContent = "Por favor preenche o teu nome antes de enviar.";
     document.getElementById("send-status").className = "send-status err";
