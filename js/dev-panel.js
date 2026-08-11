@@ -171,7 +171,7 @@ function renderDeveloperDashboard(){
 
 function loadAdminNotifications(){
   if(!(loggedClient && loggedClient.admin && !loggedClient.developer)) return Promise.resolve();
-  return fetch(BASE_URL + "/admin/notificacoes", {
+  return fetch("/admin/notificacoes", {
     headers: { "X-Token": authToken||"" }
   })
   .then(function(r){ return r.json(); })
@@ -189,12 +189,12 @@ function loadAdminNotifications(){
 function loadDeveloperDashboard(){
   if(!isDeveloper()) return Promise.resolve();
   return Promise.all([
-    fetch(BASE_URL + "/dev/summary", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/dev/notes", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/dev/status", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/dev/logins?limit=24", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/dev/logins?failed=1", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/dev/encomendas-recentes", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); })
+    fetch("/dev/summary", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
+    fetch("/dev/notes", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
+    fetch("/dev/status", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
+    fetch("/dev/logins?limit=24", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
+    fetch("/dev/logins?failed=1", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); }),
+    fetch("/dev/encomendas-recentes", { headers: { "X-Token": authToken||"" } }).then(function(r){ return r.json(); })
   ])
   .then(function(results){
     DEV_SUMMARY = results[0] && results[0].ok ? results[0].summary : null;
@@ -231,7 +231,7 @@ function saveDeveloperNote(){
     return;
   }
   setDevStatus("A publicar nota técnica...", "");
-  fetch(BASE_URL + "/dev/notes", {
+  fetch("/dev/notes", {
     method:"POST",
     headers:{ "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ title:title, body:body, audience:audience })
@@ -251,7 +251,7 @@ function saveDeveloperNote(){
 
 function toggleDeveloperNote(noteId, nextActive){
   if(!isDeveloper()) return;
-  fetch(BASE_URL + "/dev/notes/" + noteId, {
+  fetch("/dev/notes/" + noteId, {
     method:"PUT",
     headers:{ "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ active: !!nextActive })
@@ -274,7 +274,7 @@ function deleteDeveloperNote(noteId){
     danger: true
   }).then(function(ok){
     if(!ok) return;
-    fetch(BASE_URL + "/dev/notes/" + noteId, {
+    fetch("/dev/notes/" + noteId, {
       method:"DELETE",
       headers:{ "X-Token": authToken||"" }
     })
@@ -298,7 +298,7 @@ function clearAllSessionsFromDev(){
     danger: true
   }).then(function(ok){
     if(!ok) return;
-    fetch(BASE_URL + "/dev/sessions/clear", {
+    fetch("/dev/sessions/clear", {
       method:"POST",
       headers:{ "X-Token": authToken||"" }
     })

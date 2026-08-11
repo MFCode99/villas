@@ -237,7 +237,7 @@ function updateCollectionSummary(){
 }
 function loadCollectionModeFromServer(){
   if(!loggedClient || !loggedClient.admin) return Promise.resolve(false);
-  return fetch(BASE_URL + "/admin/produtos/colecao", {
+  return fetch("/admin/produtos/colecao", {
     headers: { "X-Token": authToken || "" }
   })
   .then(function(r){ return r.json(); })
@@ -284,7 +284,7 @@ function fillSmtpSettings(config, status){
 function loadAdminEmailSettings(){
   if(!loggedClient || !loggedClient.admin) return Promise.resolve(false);
   setSmtpStatusCard({ ready:false, message:"A verificar SMTP..." });
-  return fetch(BASE_URL + "/admin/email-config", {
+  return fetch("/admin/email-config", {
     headers: { "X-Token": authToken || "" }
   })
   .then(function(r){ return r.json(); })
@@ -314,7 +314,7 @@ function saveAdminEmailSettings(){
     return;
   }
   setSmtpFeedback("A atualizar configuração SMTP...", "");
-  fetch(BASE_URL + "/admin/email-config", {
+  fetch("/admin/email-config", {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
     body: JSON.stringify(payload)
@@ -365,7 +365,7 @@ function persistCategoryOrder(order, successMsg){
   var ordem = Array.isArray(order) ? order.slice() : [];
   if(!ordem.length) return;
   setCategoryStatus("A guardar ordem das categorias...", "");
-  fetch(BASE_URL + "/admin/categorias/ordem", {
+  fetch("/admin/categorias/ordem", {
     method: "POST",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ ordem: ordem })
@@ -428,7 +428,7 @@ function createCategoryFromSettings(){
     return;
   }
   setCategoryStatus("A criar categoria...", "");
-  fetch(BASE_URL + "/admin/categorias", {
+  fetch("/admin/categorias", {
     method: "POST",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: label })
@@ -463,7 +463,7 @@ function deleteCategoryFromSettings(catId){
   }).then(function(ok){
     if(!ok) return;
     setCategoryStatus("A apagar categoria...", "");
-    fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
+    fetch("/admin/categorias/" + encodeURIComponent(catId), {
       method: "DELETE",
       headers: { "X-Token": authToken||"" }
     })
@@ -493,7 +493,7 @@ function editCategoryFromSettings(catId){
     return;
   }
   setCategoryStatus("A guardar categoria...", "");
-  fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
+  fetch("/admin/categorias/" + encodeURIComponent(catId), {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: nextLabel, activo: cat.active !== false })
@@ -515,7 +515,7 @@ function toggleCategoryFromSettings(catId, nextActive){
   if(!cat) return;
   var willActivate = String(nextActive) === "1";
   setCategoryStatus((willActivate ? "A ativar" : "A desativar") + " categoria...", "");
-  fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
+  fetch("/admin/categorias/" + encodeURIComponent(catId), {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: cat.label, activo: willActivate })
@@ -576,7 +576,7 @@ function importCatalogData(file){
       var categoryChain = categories.reduce(function(prev, cat){
         return prev.then(function(){
           var exists = CATS.some(function(current){ return current.id === cat.id; });
-          var url = BASE_URL + "/admin/categorias" + (exists ? "/" + encodeURIComponent(cat.id) : "");
+          var url = "/admin/categorias" + (exists ? "/" + encodeURIComponent(cat.id) : "");
           var method = exists ? "PUT" : "POST";
           var body = exists
             ? { label: cat.label, activo: cat.active !== false }
@@ -594,7 +594,7 @@ function importCatalogData(file){
       categoryChain
         .then(function(){
           if(!categories.length) return;
-          return fetch(BASE_URL + "/admin/categorias/ordem", {
+          return fetch("/admin/categorias/ordem", {
             method: "POST",
             headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
             body: JSON.stringify({ ordem: categories.map(function(cat){ return cat.id; }) })
@@ -606,7 +606,7 @@ function importCatalogData(file){
           return products.reduce(function(prev, product){
             return prev.then(function(){
               var exists = !!PRODS[product.ref];
-              var url = BASE_URL + "/admin/produtos" + (exists ? "/" + encodeURIComponent(product.ref) : "");
+              var url = "/admin/produtos" + (exists ? "/" + encodeURIComponent(product.ref) : "");
               var method = exists ? "PUT" : "POST";
               return fetch(url, {
                 method: method,
@@ -643,7 +643,7 @@ function applyCollectionMode(mode){
     confirmLabel: "Aplicar"
   }).then(function(ok){
     if(!ok) return;
-    fetch(BASE_URL + "/admin/produtos/colecao", {
+    fetch("/admin/produtos/colecao", {
       method: "POST",
       headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
       body: JSON.stringify({ modo: mode })
@@ -794,7 +794,7 @@ function renderOrderDetail(order, isAdminView){
 }
 
 function loadOrderDetail(orderId, isAdminView){
-  var url = isAdminView ? (BASE_URL + "/admin/encomendas/" + orderId) : (BASE_URL + "/me/encomendas/" + orderId);
+  var url = isAdminView ? ("/admin/encomendas/" + orderId) : ("/me/encomendas/" + orderId);
   fetch(url, {
     headers: { "X-Token": authToken||"" }
   })
@@ -951,7 +951,7 @@ function renderAdminPanel(){
 }
 
 function renderUserOrders(){
-  fetch(BASE_URL + "/me/encomendas", {
+  fetch("/me/encomendas", {
     headers: { "X-Token": authToken||"" }
   })
   .then(function(r){ return r.json(); })
@@ -970,7 +970,7 @@ function renderUserOrders(){
 
 function renderAdminClients(){
   var body = document.getElementById("abody");
-  fetch(BASE_URL+"/admin/clientes", {
+  fetch("/admin/clientes", {
     headers: {"X-Token": authToken||""}
   })
   .then(function(r){ return r.json(); })
@@ -993,10 +993,10 @@ function renderAdminClients(){
 function renderAdminOrders(){
   var body = document.getElementById("abody");
   Promise.all([
-    fetch(BASE_URL + "/admin/encomendas", {
+    fetch("/admin/encomendas", {
       headers: { "X-Token": authToken||"" }
     }).then(function(r){ return r.json(); }),
-    fetch(BASE_URL + "/admin/clientes", {
+    fetch("/admin/clientes", {
       headers: { "X-Token": authToken||"" }
     }).then(function(r){ return r.json(); }).catch(function(){ return { ok:false, clientes:[] }; })
   ])
@@ -1029,7 +1029,7 @@ function deleteAdminOrder(orderId){
     danger: true
   }).then(function(ok){
     if(!ok) return;
-    fetch(BASE_URL + "/admin/encomendas/" + orderId, {
+    fetch("/admin/encomendas/" + orderId, {
       method: "DELETE",
       headers: { "X-Token": authToken||"" }
     })
@@ -1072,7 +1072,7 @@ function fillCartFromOrder(order){
 }
 
 function repeatOrder(orderId){
-  fetch(BASE_URL + "/me/encomendas/" + orderId + "/reencomendar", {
+  fetch("/me/encomendas/" + orderId + "/reencomendar", {
     method: "POST",
     headers: { "X-Token": authToken||"" }
   })
@@ -1089,7 +1089,7 @@ function repeatOrder(orderId){
 function downloadOrderPdf(orderId, mode){
   mode = mode || "normal";
   var suffix = mode === "sem_precos" ? "_sem_precos" : "";
-  var url = BASE_URL + "/encomendas/" + orderId + "/pdf" + (mode === "sem_precos" ? "?mode=sem_precos" : "");
+  var url = "/encomendas/" + orderId + "/pdf" + (mode === "sem_precos" ? "?mode=sem_precos" : "");
   fetch(url, {
     headers: { "X-Token": authToken||"" }
   })
