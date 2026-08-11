@@ -427,13 +427,17 @@ function doLogin(){
   var err = document.getElementById("login-err");
   var box = document.getElementById("login-box");
   var btn = document.getElementById("login-btn");
+  var loginUrl = (typeof SERVER_URL === "string" && SERVER_URL ? SERVER_URL.replace("/encomenda","/login") : "");
+  if(!loginUrl && typeof BASE_URL === "string" && BASE_URL){
+    loginUrl = BASE_URL.replace(/\/$/, "") + "/login";
+  }
 
   if(!u || !p){ err.textContent="Preenche o utilizador e a password."; err.classList.add("on"); return; }
 
   btn.disabled = true; btn.textContent = "A entrar...";
   err.classList.remove("on");
 
-  fetch(SERVER_URL.replace("/encomenda","/login"), {
+  fetch(loginUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user: u, pass: p })
@@ -463,9 +467,10 @@ function doLogin(){
 }
 
 function loginSuccess(client){
-  loggedClient = client;
-  if(client.token) authToken = client.token;
+  var btn = document.getElementById("login-btn");
   try{
+    loggedClient = client;
+    if(client.token) authToken = client.token;
     var expiresAt = Date.now() + SESSION_TTL_MS;
     sessionStorage.setItem("villas_token", authToken||"");
     sessionStorage.setItem("villas_client", JSON.stringify(client));
@@ -473,33 +478,50 @@ function loginSuccess(client){
     localStorage.setItem("villas_client", JSON.stringify(client));
     localStorage.setItem("villas_session_expires", String(expiresAt));
   }catch(e){}
-  document.getElementById("login-screen").style.display="none";
-  setLoginScreenActive(false);
-  setDeveloperMode(!!client.developer);
-  var n = client.name||client.nome||"";
-  if(n) document.getElementById("cname").value = n;
-  if(client.nif) document.getElementById("cnif").value = client.nif;
-  updateAreaButton();
-  updateUserGreeting();
-  if(client.admin && !client.developer){
-    document.getElementById("admin-settings-btn").classList.add("on");
-    document.getElementById("new-prod-btn").classList.add("on");
-    enableAdminProductEdit();
-    loadAdminNotifications();
-  } else {
-    ADMIN_NOTIFICATIONS = [];
-    updateNotificationButton();
+  try{
+    var loginScreen = document.getElementById("login-screen");
+    if(loginScreen) loginScreen.style.display="none";
+    if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
+    if(typeof setDeveloperMode === "function") setDeveloperMode(!!client.developer);
+    var n = client.name||client.nome||"";
+    if(n){
+      var cname = document.getElementById("cname");
+      if(cname) cname.value = n;
+    }
+    if(client.nif){
+      var cnif = document.getElementById("cnif");
+      if(cnif) cnif.value = client.nif;
+    }
+    if(typeof updateAreaButton === "function") updateAreaButton();
+    if(typeof updateUserGreeting === "function") updateUserGreeting();
+    if(client.admin && !client.developer){
+      var adminSettingsBtn = document.getElementById("admin-settings-btn");
+      var newProdBtn = document.getElementById("new-prod-btn");
+      if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
+      if(newProdBtn) newProdBtn.classList.add("on");
+      if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
+      if(typeof loadAdminNotifications === "function") loadAdminNotifications();
+    } else {
+      ADMIN_NOTIFICATIONS = [];
+      if(typeof updateNotificationButton === "function") updateNotificationButton();
+    }
+    var logoutBtn = document.getElementById("logout-btn");
+    if(logoutBtn) logoutBtn.classList.add("on");
+    if(client.developer && typeof openDeveloperDashboard === "function"){
+      openDeveloperDashboard();
+    }
+    setTimeout(function(){
+      if(typeof updateStickyOffsets === "function") updateStickyOffsets();
+      if(typeof syncMobileCompactState === "function") syncMobileCompactState();
+    }, 0);
+  } catch (err) {
+    console.error("Login success flow failed:", err);
+  } finally {
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = "Entrar";
+    }
   }
-  document.getElementById("logout-btn").classList.add("on");
-  if(client.developer){
-    openDeveloperDashboard();
-  }
-  var btn = document.getElementById("login-btn");
-  btn.disabled = false; btn.textContent = "Entrar";
-  setTimeout(function(){
-    updateStickyOffsets();
-    syncMobileCompactState();
-  }, 0);
 }
 
 function loginFail(err, box, btn, msg){

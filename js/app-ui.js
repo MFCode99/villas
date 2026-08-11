@@ -33,40 +33,57 @@ setTimeout(function(){
       authToken = savedToken || "";
       loggedClient = JSON.parse(savedUser);
       localStorage.setItem("villas_session_expires", String(Date.now() + SESSION_TTL_MS));
-      document.getElementById("login-screen").style.display="none";
-      setLoginScreenActive(false);
-      setDeveloperMode(!!loggedClient.developer);
-      if(loggedClient.name) document.getElementById("cname").value = loggedClient.name;
-      if(loggedClient.nif) document.getElementById("cnif").value = loggedClient.nif;
-      updateAreaButton();
-      updateUserGreeting();
+      var loginScreen = document.getElementById("login-screen");
+      if(loginScreen) loginScreen.style.display = "none";
+      if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
+      if(typeof setDeveloperMode === "function") setDeveloperMode(!!loggedClient.developer);
+      if(loggedClient.name){
+        var cname = document.getElementById("cname");
+        if(cname) cname.value = loggedClient.name;
+      }
+      if(loggedClient.nif){
+        var cnif = document.getElementById("cnif");
+        if(cnif) cnif.value = loggedClient.nif;
+      }
+      if(typeof updateAreaButton === "function") updateAreaButton();
+      if(typeof updateUserGreeting === "function") updateUserGreeting();
       if(loggedClient.admin && !loggedClient.developer){
-        document.getElementById("admin-settings-btn").classList.add("on");
-        document.getElementById("new-prod-btn").classList.add("on");
-        enableAdminProductEdit();
-        loadAdminNotifications();
-        reloadCatalogFromServer()
-          .catch(function(){ return false; })
-          .then(function(){
-            return reloadCategoriesFromServer().catch(function(){ return false; });
-          })
-          .then(function(updated){
-            if(updated || Object.keys(PRODS||{}).length) refreshCatalogUi();
-          })
-          .catch(function(){});
+        var adminSettingsBtn = document.getElementById("admin-settings-btn");
+        var newProdBtn = document.getElementById("new-prod-btn");
+        if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
+        if(newProdBtn) newProdBtn.classList.add("on");
+        if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
+        if(typeof loadAdminNotifications === "function") loadAdminNotifications();
+        if(typeof reloadCatalogFromServer === "function"){
+          reloadCatalogFromServer()
+            .catch(function(){ return false; })
+            .then(function(){
+              if(typeof reloadCategoriesFromServer === "function"){
+                return reloadCategoriesFromServer().catch(function(){ return false; });
+              }
+              return false;
+            })
+            .then(function(updated){
+              if(updated || Object.keys(PRODS||{}).length){
+                if(typeof refreshCatalogUi === "function") refreshCatalogUi();
+              }
+            })
+            .catch(function(){});
+        }
       } else {
         ADMIN_NOTIFICATIONS = [];
-        updateNotificationButton();
+        if(typeof updateNotificationButton === "function") updateNotificationButton();
       }
       if(loggedClient.developer){
-        openDeveloperDashboard();
+        if(typeof openDeveloperDashboard === "function") openDeveloperDashboard();
       }
-      document.getElementById("logout-btn").classList.add("on");
+      var logoutBtn = document.getElementById("logout-btn");
+      if(logoutBtn) logoutBtn.classList.add("on");
       setTimeout(function(){
-        updateStickyOffsets();
-        syncMobileCompactState();
+        if(typeof updateStickyOffsets === "function") updateStickyOffsets();
+        if(typeof syncMobileCompactState === "function") syncMobileCompactState();
       }, 0);
-      ensureCatalogReadyOnStartup();
+      if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
       return;
     }
   }catch(e){}
@@ -77,11 +94,12 @@ setTimeout(function(){
     localStorage.removeItem("villas_client");
     localStorage.removeItem("villas_session_expires");
   }catch(e){}
-  updateUserGreeting();
-  setLoginScreenActive(true);
-  setMobileCompact(false);
-  ensureCatalogReadyOnStartup();
-  document.getElementById("l-user").focus();
+  if(typeof updateUserGreeting === "function") updateUserGreeting();
+  if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
+  if(typeof setMobileCompact === "function") setMobileCompact(false);
+  if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
+  var loginUser = document.getElementById("l-user");
+  if(loginUser) loginUser.focus();
 }, 100);
 
 window.addEventListener("resize", updateStickyOffsets);
