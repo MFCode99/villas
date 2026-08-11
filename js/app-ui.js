@@ -121,6 +121,7 @@ document.addEventListener("wheel", function(e){
 function doLogout(){
   loggedClient = null;
   authToken = null;
+  if(typeof sessionExpiryHandled !== "undefined") sessionExpiryHandled = false;
   ADMIN_NOTIFICATIONS = [];
   DEV_SUMMARY = null;
   DEV_STATUS_DATA = null;

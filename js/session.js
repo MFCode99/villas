@@ -96,43 +96,61 @@ function doLogin(){
   var err = document.getElementById("login-err");
   var box = document.getElementById("login-box");
   var btn = document.getElementById("login-btn");
-  var loginUrl = (typeof SERVER_URL === "string" && SERVER_URL ? SERVER_URL.replace("/encomenda","/login") : "");
-  if(!loginUrl && typeof BASE_URL === "string" && BASE_URL){
-    loginUrl = BASE_URL.replace(/\/$/, "") + "/login";
+  var loginUrls = [];
+  var base = (typeof BASE_URL === "string" && BASE_URL) ? BASE_URL.replace(/\/$/, "") : "";
+  if(base) loginUrls.push(base + "/login");
+  loginUrls.push("/login");
+  if(window.location && window.location.origin && window.location.origin !== "null" && window.location.protocol !== "file:"){
+    loginUrls.push(window.location.origin.replace(/\/$/, "") + "/login");
   }
+  loginUrls.push("https://villas.mlabcorp.net/login");
+  loginUrls = loginUrls.filter(function(url, idx, arr){ return !!url && arr.indexOf(url) === idx; });
 
   if(!u || !p){ err.textContent="Preenche o utilizador e a password."; err.classList.add("on"); return; }
 
   btn.disabled = true; btn.textContent = "A entrar...";
   err.classList.remove("on");
 
-  fetch(loginUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user: u, pass: p })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(res){
-    if(res.ok){
-      authToken = res.token||"";
-      loginSuccess({
-        user:u,
-        name:res.nome,
-        nif:res.nif,
-        email: res.email || "",
-        telefone: res.telefone || "",
-        admin:res.admin,
-        developer:res.developer,
-        id:res.id,
-        token:res.token
-      });
-    } else {
-      loginFail(err, box, btn, res.message||"Utilizador ou password incorrectos");
+  (function tryLogin(index){
+    if(index >= loginUrls.length){
+      loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
+      return;
     }
-  })
-  .catch(function(){
-    loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
-  });
+    fetch(loginUrls[index], {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: u, pass: p })
+    })
+    .then(function(r){
+      return r.text().then(function(text){
+        var res = {};
+        try{ res = text ? JSON.parse(text) : {}; }catch(e){}
+        if(!r.ok || !res.ok){
+          if(index + 1 < loginUrls.length) return tryLogin(index + 1);
+          loginFail(err, box, btn, (res && res.message) || "Utilizador ou password incorrectos");
+          return;
+        }
+        authToken = res.token||"";
+        loginSuccess({
+          user:u,
+          name:res.nome,
+          nif:res.nif,
+          email: res.email || "",
+          telefone: res.telefone || "",
+          admin:res.admin,
+          developer:res.developer,
+          id:res.id,
+          token:res.token
+        });
+      });
+    })
+    .catch(function(){
+      if(index + 1 < loginUrls.length) return tryLogin(index + 1);
+      loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
+    });
+  })(0);
 }
 
 function loginSuccess(client){
