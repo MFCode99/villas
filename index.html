@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Villas</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f0f0f'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='Georgia, serif' font-size='34' fill='%23c9a84c'%3EV%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/main.css?v=20260625-11">
+<link rel="stylesheet" href="styles/admin.css?v=20260625-11">
+<link rel="stylesheet" href="styles/dev.css">
+</head>
+<body>
+<div id="pa" style="display:none"></div>
+
+
+<div class="login-screen" id="login-screen">
+  <div class="login-box" id="login-box">
+    <div class="login-card">
+      <div class="login-badge">Acesso Reservado</div>
+      <div class="login-logo">Villas<sup>&#174;</sup></div>
+      <div class="login-sub">Cat&aacute;logo digital profissional</div>
+      <p class="login-copy">Entra para consultar o cat&aacute;logo, gerir encomendas e aceder &agrave; tua &aacute;rea de cliente.</p>
+      <div class="login-err" id="login-err">Utilizador ou password incorrectos</div>
+      <div class="login-field">
+        <label class="login-lbl" for="l-user">Utilizador</label>
+        <input class="login-inp" id="l-user" type="text" placeholder="O teu utilizador" autocomplete="username" autocapitalize="none">
+      </div>
+      <div class="login-field">
+        <label class="login-lbl" for="l-pass">Password</label>
+        <input class="login-inp" id="l-pass" type="password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="current-password">
+      </div>
+      <button class="login-btn" id="login-btn">Entrar</button>
+      <div class="login-footer">V&iacute;tor Gouveia &middot; +351 968 350 394</div>
+    </div>
+  </div>
+</div>
+
+<header class="hdr">
+  <div class="logo">Villas<sup style="font-size:10px;color:var(--gold2)">&#174;</sup></div>
+  <div class="header-actions">
+  <div class="user-greet" id="user-greet"><span class="user-greet-label">Sess&atilde;o ativa</span><span class="user-greet-name">Bem-vindo, <b id="user-greet-name">cliente</b></span></div>
+  <div class="header-admin-tools" id="header-admin-tools">
+  <button class="admin-btn" id="new-prod-btn">Novo produto</button>
+  <button class="admin-btn" id="admin-btn">&#9881; &Aacute;rea</button>
+  <button class="admin-btn settings-btn" id="admin-settings-btn" title="Defini&ccedil;&otilde;es da cole&ccedil;&atilde;o">&#9881;</button>
+  <button class="logout-btn" id="logout-btn" title="Logout">&#10162;</button>
+  </div>
+  <button class="cart-btn" id="cart-btn">&#128722; Encomenda <span class="cart-n" id="cart-n">0</span></button>
+  </div>
+</header>
+<div id="mobile-header-sentinel" style="height:1px;"></div>
+
+<div class="srch-wrap">
+  <div class="srch-inner">
+    <span class="srch-ico">&#128269;</span>
+    <input class="srch-inp" id="srch" type="text" placeholder="Pesquisar refer&ecirc;ncia, nome, cor, tipo..." autocomplete="off">
+    <button class="srch-x" id="srch-x">&#10005;</button>
+  </div>
+  <div class="srch-info" id="srch-info"></div>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+<main class="main" id="main">
+  <div class="nores" id="nores"><div class="nores-ico">&#128270;</div><p>Nenhum produto encontrado</p></div>
+</main>
+
+<section class="dev-shell" id="dev-shell">
+  <div class="dev-hero">
+    <div>
+      <div class="dev-badge">Conta Programador</div>
+      <h1>Painel T&eacute;cnico</h1>
+      <p>Centro r&aacute;pido de controlo para acompanhar a loja, publicar avisos ao admin, vigiar atividade recente e fazer a&ccedil;&otilde;es &uacute;teis sem precisares de entrar no servidor.</p>
+    </div>
+  </div>
+  <div class="dev-grid" id="dev-stats"></div>
+  <div class="dev-topbar">
+    <div class="dev-tools">
+      <button class="dev-btn primary" id="dev-open-dashboard">Abrir painel</button>
+      <button class="dev-btn" id="dev-refresh-all">Atualizar dados</button>
+      <button class="dev-btn warn" id="dev-clear-sessions">For&ccedil;ar novo login a todos</button>
+    </div>
+    <div class="dev-status" id="dev-status"></div>
+  </div>
+  <div class="dev-layout">
+    <div class="dev-stack">
+      <div class="dev-card">
+        <h3>Patch Notes</h3>
+        <p>Publica notifica&ccedil;&otilde;es simples para o admin, ativa ou desativa quando quiseres e apaga notas antigas que j&aacute; n&atilde;o fazem sentido.</p>
+        <div class="dev-form">
+          <input id="dev-note-title" type="text" placeholder="T&iacute;tulo da nota">
+          <select id="dev-note-audience">
+            <option value="admin">S&oacute; admins</option>
+            <option value="all">Todos</option>
+          </select>
+          <textarea id="dev-note-body" placeholder="Escreve aqui a atualiza&ccedil;&atilde;o, aviso ou instru&ccedil;&atilde;o que queres publicar."></textarea>
+        </div>
+        <div class="dev-actions" style="margin-top:12px">
+          <button class="dev-btn primary" id="dev-note-save">Publicar nota</button>
+        </div>
+      </div>
+      <div class="dev-card">
+        <h3>Notas Publicadas</h3>
+        <p>Hist&oacute;rico simples das notas criadas por ti, com controlo r&aacute;pido para ativar, desativar ou apagar.</p>
+        <div class="dev-list" id="dev-notes-list"></div>
+      </div>
+    </div>
+    <div class="dev-stack">
+      <div class="dev-card">
+        <h3>Estado do Site</h3>
+        <p>Resumo r&aacute;pido do estado geral, do email e da atividade recente.</p>
+        <div class="dev-surface">
+          <h4>Estado atual</h4>
+          <div class="dev-list" id="dev-health-list"></div>
+        </div>
+      </div>
+      <div class="dev-card">
+        <h3>Atividade de Login</h3>
+        <p>Vis&atilde;o mais completa dos registos de login guardados na base de dados, incluindo tentativas falhadas e os &uacute;ltimos acessos registados.</p>
+        <div class="dev-subgrid">
+          <div>
+            <div class="dev-section-title">Falhados</div>
+            <div class="dev-list" id="dev-logins-list"></div>
+          </div>
+          <div>
+            <div class="dev-section-title">Recentes</div>
+            <div class="dev-list" id="dev-logins-all-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="dev-card">
+        <h3>&Uacute;ltimas Encomendas</h3>
+        <p>Vis&atilde;o r&aacute;pida das encomendas mais recentes, &uacute;til para confirmares que a loja est&aacute; a receber atividade normalmente.</p>
+        <div class="dev-list" id="dev-orders-list"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-head">
+    <h2>Notifica&ccedil;&otilde;es</h2>
+    <button class="aph-x" id="notif-close">&#10005;</button>
+  </div>
+  <div class="notif-body" id="notif-body"></div>
+</div>
+
+<div class="set-bg" id="settings-bg">
+  <div class="set-box">
+    <div class="set-head">
+      <div>
+        <h3>&#9881; Defini&ccedil;&otilde;es da Cole&ccedil;&atilde;o</h3>
+        <p>Gere cole&ccedil;&otilde;es, categorias e backups com a mesma navega&ccedil;&atilde;o da &aacute;rea admin.</p>
+      </div>
+      <button class="aph-x set-head-close" id="settings-close" type="button" aria-label="Fechar">&#10005;</button>
+    </div>
+    <div class="set-tabs">
+      <button class="set-tab on" type="button" data-set-tab="collection">Cole&ccedil;&atilde;o</button>
+      <button class="set-tab" type="button" data-set-tab="categories">Categorias</button>
+      <button class="set-tab" type="button" data-set-tab="backup">Backup</button>
+      <button class="set-tab" type="button" data-set-tab="email">Email</button>
+    </div>
+    <div class="set-panels">
+      <div class="set-panel on" data-set-panel="collection">
+        <div class="set-summary" id="collection-summary">
+          <span class="set-summary-label">Estado Atual</span>
+          <strong id="collection-summary-title">Personalizada</strong>
+          <small id="collection-summary-text">A carregar estado da coleção...</small>
+          <div class="set-summary-chips" id="collection-summary-chips"></div>
+        </div>
+        <div class="set-section">
+          <div class="set-section-head">
+            <div>
+              <h4>Cole&ccedil;&atilde;o Ativa</h4>
+              <p>Escolhe rapidamente que cole&ccedil;&atilde;o fica ativa no site. Os artigos marcados como <b>Ambos</b> permanecem sempre ativos.</p>
+            </div>
+          </div>
+          <div class="set-actions">
+            <button class="set-action" id="settings-summer">Modo Ver&atilde;o
+              <small>Ativa Ver&atilde;o e Ambos, desativa Inverno</small>
+            </button>
+            <button class="set-action" id="settings-winter">Modo Inverno
+              <small>Ativa Inverno e Ambos, desativa Ver&atilde;o</small>
+            </button>
+            <button class="set-action" id="settings-all">Reativar Tudo
+              <small>Volta a ativar Ver&atilde;o, Inverno e Ambos</small>
+            </button>
+          </div>
+        </div>
+        <div class="set-section">
+          <div class="set-section-head">
+            <div>
+              <h4>Itens Inativos</h4>
+              <p>Mostra ou esconde os produtos inativos sem os apagar da base de dados.</p>
+            </div>
+          </div>
+          <div class="set-actions">
+            <button class="set-action" id="settings-toggle-inactive">
+              <small>Controla a visibilidade dos produtos desativados</small>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="set-panel" data-set-panel="categories">
+        <div class="set-section">
+          <div class="set-section-head">
+            <div>
+              <h4>Categorias</h4>
+              <p>Cria categorias novas para aparecerem logo no topo e remove categorias vazias quando j&aacute; n&atilde;o fizerem falta.</p>
+            </div>
+          </div>
+          <div class="cat-create">
+            <input id="category-name" type="text" placeholder="Ex: Packs Promocionais">
+            <button id="category-create" type="button">+ Criar</button>
+          </div>
+          <div class="cat-status" id="category-status"></div>
+          <div class="cat-list" id="category-list"></div>
+        </div>
+      </div>
+      <div class="set-panel" data-set-panel="backup">
+        <div class="set-section">
+          <div class="set-section-head">
+            <div>
+              <h4>Backup R&aacute;pido</h4>
+              <p>Exporta ou volta a importar categorias e produtos num ficheiro JSON.</p>
+            </div>
+          </div>
+          <div class="set-actions">
+            <button class="set-action" id="settings-export">Exportar Dados
+              <small>Guarda um backup de categorias e produtos</small>
+            </button>
+            <button class="set-action" id="settings-import">Importar Dados
+              <small>Rep&otilde;e categorias e produtos a partir de JSON</small>
+            </button>
+          </div>
+          <input id="settings-import-file" type="file" accept="application/json" style="display:none">
+        </div>
+      </div>
+      <div class="set-panel" data-set-panel="email">
+        <div class="smtp-card">
+          <div class="smtp-status" id="smtp-status-card">
+            <div class="smtp-status-dot"></div>
+            <div>
+              <strong id="smtp-status-title">Ligação ao email</strong>
+              <span id="smtp-status-text">A carregar configurações...</span>
+            </div>
+          </div>
+          <div class="smtp-grid">
+            <div class="smtp-field">
+              <span>Email remetente</span>
+              <input id="smtp-email-from" type="email" placeholder="ex: loja@exemplo.pt">
+            </div>
+            <div class="smtp-field">
+              <span>Email destino</span>
+              <input id="smtp-email-to" type="email" placeholder="ex: encomendas@exemplo.pt">
+            </div>
+            <div class="smtp-field smtp-field-full">
+              <span>Password / app password</span>
+              <input id="smtp-email-pass" type="password" placeholder="Atualiza apenas se precisares">
+              <small id="smtp-email-pass-hint">Sem password guardada.</small>
+            </div>
+          </div>
+          <div class="smtp-actions">
+            <button class="set-action smtp-save" id="smtp-save" type="button">Guardar Email</button>
+          </div>
+          <div class="smtp-feedback" id="smtp-feedback"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="ov"></div>
+<div class="panel" id="panel">
+  <div class="ph"><h2>Encomenda</h2><button class="ph-x" id="ph-x">&#10005;</button></div>
+  <div class="cf"><h3>Dados do Cliente</h3>
+    <div class="cfrow">
+      <input class="cfinp" id="cname" type="text" placeholder="Nome completo">
+      <input class="cfinp" id="cnif" type="text" placeholder="Empresa / NIF">
+    </div>
+  </div>
+  <div class="citems" id="citems"><div class="cempty"><div class="cempty-ico">&#129510;</div><p>Sem itens</p></div></div>
+  <div class="notes-wrap">
+    <label class="notes-lbl" for="cnotes">Notas / Observa&#231;&#245;es</label>
+    <textarea class="notes-ta" id="cnotes" placeholder="Ex: entregar na quinta, embalagem especial..."></textarea>
+  </div>
+  <div class="pfooter">
+    <div class="trow"><span class="tlbl">Total (custo)</span><span class="tamt" id="tamt">0,00 &euro;</span></div>
+    <div class="tmin" id="tmin">Encomenda m&iacute;nima: <b>250,00 &euro;</b></div>
+    <button class="pbtn" id="pbtn" disabled>&#9989; Finalizar Encomenda</button>
+  </div>
+</div>
+
+<div class="product-view-bg" id="product-view-bg">
+  <div class="product-view">
+    <button class="product-view-close" id="product-view-close" type="button" aria-label="Fechar">&#10005;</button>
+    <div class="product-view-media">
+      <img id="product-view-img" src="" alt="">
+      <div class="product-view-empty" id="product-view-empty">
+        <strong>Sem imagem</strong>
+        <span>Este produto ainda n&atilde;o tem imagem associada.</span>
+      </div>
+    </div>
+    <div class="product-view-info">
+      <div class="product-view-ref" id="product-view-ref">Ref.</div>
+      <h3 id="product-view-name">Produto</h3>
+      <div class="product-view-type" id="product-view-type">Artigo</div>
+      <div class="product-view-price-row">
+        <strong id="product-view-price">0,00&euro;</strong>
+        <span id="product-view-pvp"></span>
+      </div>
+      <div class="product-view-details">
+        <div>
+          <span>Cores</span>
+          <b id="product-view-colors">-</b>
+        </div>
+        <div>
+          <span>Tamanhos</span>
+          <b id="product-view-sizes">-</b>
+        </div>
+        <div>
+          <span>Venda</span>
+          <b id="product-view-step">-</b>
+        </div>
+      </div>
+      <div class="product-view-pick">
+        <div class="product-view-field">
+          <label for="product-view-cor">Cor</label>
+          <select id="product-view-cor"></select>
+        </div>
+        <div class="product-view-field">
+          <label for="product-view-tam">Tamanho</label>
+          <select id="product-view-tam"></select>
+        </div>
+        <div class="product-view-field product-view-field-qty">
+          <label for="product-view-qty">Quantidade</label>
+          <input id="product-view-qty" type="number" min="1" step="1" value="1">
+        </div>
+      </div>
+      <div class="product-view-choice" id="product-view-choice"></div>
+      <div class="product-view-actions">
+        <button class="product-view-edit" id="product-view-edit" type="button">Editar</button>
+        <button class="product-view-add" id="product-view-add" type="button">Adicionar &agrave; encomenda</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OUTPUT MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3>Encomenda pronta!</h3>
+    <p>Escolhe como queres enviar ou guardar:</p>
+    <button class="mbtn mbtn-send" id="mo-send">
+      <span class="mico">&#10148;</span>
+      <span class="mlbl">Enviar Encomenda</span>
+      <span class="msub">direto para o email do V&iacute;tor</span>
+    </button>
+    <div class="send-status" id="send-status"></div>
+    <div class="modal-divider">ou guardar como:</div>
+    <div class="modal-btns">
+      <button class="mbtn" id="mo-print"><span class="mico">&#128438;</span><span class="mlbl">Imprimir</span></button>
+      <button class="mbtn" id="mo-email"><span class="mico">&#9993;</span><span class="mlbl">Email</span></button>
+      <button class="mbtn" id="mo-csv"><span class="mico">&#128196;</span><span class="mlbl">Excel / CSV</span></button>
+      <button class="mbtn" id="mo-wa"><span class="mico">&#128172;</span><span class="mlbl">WhatsApp</span></button>
+    </div>
+    <button class="modal-cancel" id="mo-cancel">Cancelar</button>
+  </div>
+</div>
+
+<div class="confirm-bg" id="confirm-bg">
+  <div class="confirm-box">
+    <h3 id="confirm-title">Confirmar</h3>
+    <p id="confirm-text">Tens a certeza que queres continuar?</p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" id="confirm-cancel">Cancelar</button>
+      <button class="confirm-accept" id="confirm-accept">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="client-modal-bg" id="client-modal-bg">
+  <div class="client-modal">
+    <div class="client-modal-head">
+      <div>
+        <span class="client-modal-kicker">Gest&atilde;o de clientes</span>
+        <h3 id="client-modal-title">Novo Cliente</h3>
+      </div>
+      <button class="client-modal-close" id="client-modal-close" type="button" aria-label="Fechar">&#10005;</button>
+    </div>
+    <div class="client-modal-body" id="client-modal-body"></div>
+  </div>
+</div>
+
+
+<!-- ADMIN PANEL -->
+<div class="apanel" id="apanel">
+  <div class="aph">
+    <h2>&#9881; Gest&#227;o de Clientes</h2>
+    <button class="aph-x" id="aph-x">&#10005;</button>
+  </div>
+  <div class="abody" id="abody">
+    <!-- form + list injected by JS -->
+  </div>
+</div>
+
+<!-- PRODUCT EDIT MODAL -->
+<div class="pedit-bg" id="pedit-bg">
+  <div class="pedit-box">
+    <div class="pedit-head">
+      <div>
+        <span class="pedit-kicker">Gest&atilde;o de cat&aacute;logo</span>
+        <h3 id="pedit-title">Editar Produto</h3>
+      </div>
+      <button class="pedit-head-close" id="pedit-head-close" type="button" aria-label="Fechar">&#10005;</button>
+    </div>
+    <div id="pedit-modified" class="pedit-modified" style="display:none">&#9998; Este produto tem altera&ccedil;&otilde;es</div>
+    <div class="pedit-layout">
+      <div class="pedit-media">
+        <div class="pedit-image-card" id="pedit-image-card">
+          <img class="pedit-img-preview" id="pedit-img-preview" src="" alt="">
+          <div class="pedit-image-empty" id="pedit-image-empty">
+            <strong>Adicionar imagem</strong>
+            <span>Arrasta uma imagem ou escolhe um ficheiro. O site ajusta automaticamente.</span>
+          </div>
+        </div>
+        <div class="pedit-image-actions">
+          <label class="pedit-upload-btn" for="pedit-img-file">Escolher imagem</label>
+          <button class="pedit-link-btn" id="pedit-img-url-toggle" type="button">Usar URL</button>
+        </div>
+        <div class="pedit-img-url" id="pedit-img-url-wrap">
+          <label class="pedit-lbl">URL da imagem</label>
+          <input class="pedit-inp pedit-full" id="pedit-img" type="text" placeholder="https://...">
+        </div>
+        <input class="pedit-inp pedit-full" id="pedit-img-file" type="file" accept="image/*">
+        <div class="pedit-image-status" id="pedit-image-status"></div>
+      </div>
+      <div class="pedit-fields">
+    <div class="pedit-grid">
+      <div>
+        <label class="pedit-lbl">Refer&ecirc;ncia</label>
+        <input class="pedit-inp" id="pedit-ref" type="text">
+      </div>
+      <div>
+        <label class="pedit-lbl">Categoria</label>
+        <select class="pedit-inp" id="pedit-cat"></select>
+      </div>
+      <div>
+        <label class="pedit-lbl">Tipo</label>
+        <input class="pedit-inp" id="pedit-type" type="text" placeholder="Ex: Soquete HM">
+      </div>
+      <div>
+        <label class="pedit-lbl">Pre&ccedil;o Custo (&euro;)</label>
+        <input class="pedit-inp" id="pedit-price" type="number" step="0.01">
+      </div>
+      <div>
+        <label class="pedit-lbl">P.V.P (&euro;)</label>
+        <input class="pedit-inp" id="pedit-pvp" type="number" step="0.01">
+      </div>
+      <div>
+        <label class="pedit-lbl">Incremento Quantidade</label>
+        <input class="pedit-inp" id="pedit-step" type="number" min="1" step="1" placeholder="Ex: 1 ou 12">
+      </div>
+      <div>
+        <label class="pedit-lbl">Nome</label>
+        <input class="pedit-inp" id="pedit-name" type="text">
+      </div>
+      <div class="pedit-full">
+        <label class="pedit-lbl">Cores (separadas por v&iacute;rgula)</label>
+        <input class="pedit-inp" id="pedit-cores" type="text">
+      </div>
+      <div class="pedit-full">
+        <label class="pedit-lbl">Tamanhos (separados por v&iacute;rgula)</label>
+        <input class="pedit-inp" id="pedit-tams" type="text">
+      </div>
+      <div>
+        <label class="pedit-lbl">Estado</label>
+        <select class="pedit-inp" id="pedit-active">
+          <option value="1">Ativo</option>
+          <option value="0">Inativo</option>
+        </select>
+      </div>
+      <div>
+        <label class="pedit-lbl">Esta&ccedil;&atilde;o</label>
+        <select class="pedit-inp" id="pedit-season">
+          <option value="ambos">Ambos</option>
+          <option value="inverno">Inverno</option>
+          <option value="verao">Ver&atilde;o</option>
+        </select>
+      </div>
+    </div>
+      </div>
+    </div>
+    <div class="pedit-btns">
+      <button class="pedit-cancel" id="pedit-cancel">Cancelar</button>
+      <button class="pedit-duplicate" id="pedit-duplicate">Duplicar</button>
+      <button class="pedit-delete" id="pedit-delete">Apagar</button>
+      <button class="pedit-reset" id="pedit-reset">&#8635; Repor Original</button>
+      <button class="pedit-save" id="pedit-save">&#10003; Guardar</button>
+    </div>
+  </div>
+</div>
+
+
+<script src="js/utils.js?v=20260625-11"></script>
+<script src="js/catalog-data.js?v=20260625-11"></script>
+<script src="js/shop.js?v=20260625-11"></script>
+<script src="js/session.js?v=20260625-11"></script>
+<script src="js/dev-panel.js?v=20260625-11"></script>
+<script src="js/app-ui.js?v=20260625-11"></script>
+<script src="js/admin-clients.js?v=20260625-11"></script>
+<script src="js/admin-products.js?v=20260625-11"></script>
+<script src="js/admin-core.js?v=20260625-11"></script>
+<script src="js/bootstrap.js?v=20260625-11"></script>
+</body>
+</html>
+
+
+
