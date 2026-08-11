@@ -1441,7 +1441,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url==='/entrar') {
     try {
       let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-14";</script>', '<script>window.VILLAS_INITIAL_VIEW = "login";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-14";</script>');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "login";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
       res.writeHead(200, {
         'Content-Type':'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -1462,7 +1462,7 @@ async function handleRequest(req, res) {
     }
     try {
       let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-14";</script>', '<script>window.VILLAS_INITIAL_VIEW = "catalog";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-14";</script>');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "catalog";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
       res.writeHead(200, {
         'Content-Type':'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -1483,7 +1483,7 @@ async function handleRequest(req, res) {
     }
     try {
       let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-14";</script>', '<script>window.VILLAS_INITIAL_VIEW = "admin";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-14";</script>');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "admin";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
       res.writeHead(200, {
         'Content-Type':'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

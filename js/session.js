@@ -279,6 +279,10 @@ function loginSuccess(client){
   }catch(e){}
   try{
     // UI updates handled in applyAuthenticatedState.
+    if(window.location && window.location.pathname !== "/catalogo"){
+      window.location.replace("/catalogo");
+      return;
+    }
   } catch (err) {
     console.error("Login success flow failed:", err);
     clearAuthenticatedState();

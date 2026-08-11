@@ -36,6 +36,7 @@ setTimeout(function(){
     return;
   }
   if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
+  if(typeof finishAuthCheck === "function") finishAuthCheck();
 }, 100);
 
 window.addEventListener("resize", updateStickyOffsets);
