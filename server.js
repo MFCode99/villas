@@ -1434,7 +1434,9 @@ async function handleRequest(req, res) {
   // Servir app
   if (req.method === 'GET' && (url==='/'||url==='/index.html'||url==='/catalogo'||url==='/entrar'||url==='/admin')) {
     try {
-      const html = fs.readFileSync(CONFIG.appFile, 'utf8');
+      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
+      const initialView = url === '/catalogo' ? 'catalog' : (url === '/admin' ? 'admin' : 'login');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-13";</script>', '<script>window.VILLAS_INITIAL_VIEW = "' + initialView + '";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-13";</script>');
       res.writeHead(200, {
         'Content-Type':'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

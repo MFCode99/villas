@@ -148,6 +148,10 @@ function applyAuthenticatedState(client){
   }
 }
 
+function shouldAutoBootstrapSession(){
+  return String(window.VILLAS_INITIAL_VIEW || "catalog").toLowerCase() !== "login";
+}
+
 function bootstrapSessionFromServer(){
   return fetch("/me", {
     method: "GET",
@@ -308,10 +312,11 @@ document.getElementById("l-user").addEventListener("keydown", function(e){
 });
 
 setTimeout(function(){
-  if(typeof bootstrapSessionFromServer === "function"){
+  if(typeof bootstrapSessionFromServer === "function" && shouldAutoBootstrapSession()){
     bootstrapSessionFromServer().catch(function(){ return false; });
     return;
   }
+  if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
   finishAuthCheck();
 }, 50);
 
