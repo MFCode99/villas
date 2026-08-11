@@ -9,6 +9,7 @@ var cartSyncTimer = null;
 var cartSyncInFlight = false;
 var cartSyncQueued = false;
 var cartUiBound = false;
+var cartDelegatedBound = false;
 
 // â”€â”€ BUILD CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function mkCard(p){
@@ -707,6 +708,14 @@ function bindCartPanelUi(){
       e.stopPropagation();
       toggleCartPanel();
     });
+    cartBtn.onclick = function(e){
+      if(e){
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      toggleCartPanel();
+      return false;
+    };
   }
 
   var cartClose = document.getElementById("ph-x");
@@ -822,8 +831,31 @@ function bindCartPanelUi(){
   });
 }
 
+function bindCartDelegatedUi(){
+  if(cartDelegatedBound) return;
+  cartDelegatedBound = true;
+  document.addEventListener("click", function(e){
+    var target = e.target;
+    if(!target) return;
+    var cartTrigger = target.closest ? target.closest("#cart-btn") : null;
+    if(cartTrigger){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleCartPanel();
+      return;
+    }
+    var closeTrigger = target.closest ? target.closest("#ph-x") : null;
+    if(closeTrigger){
+      e.preventDefault();
+      e.stopPropagation();
+      closeCartPanel();
+    }
+  }, true);
+}
+
 function initCartUi(){
   bindCartPanelUi();
+  bindCartDelegatedUi();
   renderCart();
   cart.forEach(function(item){ updateBadge(item.ref); });
 }
