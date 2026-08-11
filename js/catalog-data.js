@@ -1,6 +1,11 @@
-Ôªøvar API_BASE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-  ? "http://localhost:3000"
-  : window.location.origin;
+var API_BASE_URL = (function(){
+  var host = window.location.hostname || "";
+  var origin = window.location.origin || "";
+  var protocol = window.location.protocol || "";
+  if(host === "localhost" || host === "127.0.0.1") return "http://localhost:3000";
+  if(origin && origin !== "null" && protocol !== "file:") return origin;
+  return "https://villas.mlabcorp.net";
+})();
 
 function inferQtyStep(prod){
   var explicit = parseInt(prod && (prod.qtdStep != null ? prod.qtdStep : prod.qtd_step), 10);
@@ -104,7 +109,7 @@ var CATALOG = [
   {ref:"4000",name:"Encorpado",type:"Soquete HM",cat:"SoquetesHM",price:0.61,pvp:1.50,cores:["PRETO BRANCO","PRETO LARANJA","MARINHO VERMELHO"],tams:["39-42","43-46"]}
 ];
 
-// O cat√°logo ativo passa a vir exclusivamente da base de dados.
+// O cat·logo ativo passa a vir exclusivamente da base de dados.
 CATALOG = [];
 Object.keys(IMGS).forEach(function(ref){ delete IMGS[ref]; });
 
@@ -222,7 +227,7 @@ function loadCatalogFromServerSync(){
     if(isAdminSession && savedToken) xhr.setRequestHeader("X-Token", savedToken);
     xhr.send(null);
     if(xhr.status === 401){
-      handleSessionExpired("A sess√£o expirou. Volta a iniciar sess√£o.");
+      handleSessionExpired("A sess„o expirou. Volta a iniciar sess„o.");
       return;
     }
     if(xhr.status < 200 || xhr.status >= 300) return;
@@ -297,8 +302,8 @@ function reloadCatalogFromServer(){
   })
   .then(function(result){
     if(result.status === 401 || isSessionExpiredMessage(result.body && result.body.message)){
-      handleSessionExpired((result.body && result.body.message) || "A sess√£o expirou. Volta a iniciar sess√£o.");
-      throw new Error("A sess√£o expirou. Volta a iniciar sess√£o.");
+      handleSessionExpired((result.body && result.body.message) || "A sess„o expirou. Volta a iniciar sess„o.");
+      throw new Error("A sess„o expirou. Volta a iniciar sess„o.");
     }
     if(!result.ok || !result.body || !result.body.ok){
       throw new Error((result.body && result.body.message) || "Nao foi possivel atualizar o catalogo.");
@@ -321,8 +326,8 @@ function reloadCategoriesFromServer(){
   })
   .then(function(result){
     if(result.status === 401 || isSessionExpiredMessage(result.body && result.body.message)){
-      handleSessionExpired((result.body && result.body.message) || "A sess√£o expirou. Volta a iniciar sess√£o.");
-      throw new Error("A sess√£o expirou. Volta a iniciar sess√£o.");
+      handleSessionExpired((result.body && result.body.message) || "A sess„o expirou. Volta a iniciar sess„o.");
+      throw new Error("A sess„o expirou. Volta a iniciar sess„o.");
     }
     if(!result.ok || !result.body || !result.body.ok){
       throw new Error((result.body && result.body.message) || "Nao foi possivel atualizar as categorias.");

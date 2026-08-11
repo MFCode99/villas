@@ -1,6 +1,11 @@
-﻿var API_BASE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-  ? "http://localhost:3000"
-  : window.location.origin;
+var API_BASE_URL = (function(){
+  var host = window.location.hostname || "";
+  var origin = window.location.origin || "";
+  var protocol = window.location.protocol || "";
+  if(host === "localhost" || host === "127.0.0.1") return "http://localhost:3000";
+  if(origin && origin !== "null" && protocol !== "file:") return origin;
+  return "https://villas.mlabcorp.net";
+})();
 
 function inferQtyStep(prod){
   var explicit = parseInt(prod && (prod.qtdStep != null ? prod.qtdStep : prod.qtd_step), 10);
@@ -143,7 +148,7 @@ function loadCatalogFromServerSync(){
     if(isAdminSession && savedToken) xhr.setRequestHeader("X-Token", savedToken);
     xhr.send(null);
     if(xhr.status === 401){
-      handleSessionExpired("A sessão expirou. Volta a iniciar sessão.");
+      handleSessionExpired("A sess�o expirou. Volta a iniciar sess�o.");
       return;
     }
     if(xhr.status < 200 || xhr.status >= 300) return;
@@ -226,7 +231,7 @@ function syncInactiveToggleUi(){
   btn.classList.toggle("is-on", showInactiveProducts);
   btn.innerHTML = showInactiveProducts
     ? "Ocultar Inativos<small>Esconde os produtos desativados sem os apagar da base de dados</small>"
-    : "Mostrar Inativos<small>Volta a mostrar os produtos desativados no catálogo</small>";
+    : "Mostrar Inativos<small>Volta a mostrar os produtos desativados no cat�logo</small>";
 }
 function setShowInactiveProducts(value){
   showInactiveProducts = !!value;
@@ -278,7 +283,7 @@ setTimeout(function(){
   syncMobileCompactState();
 }, 0);
 
-// â”€â”€ BUILD CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── BUILD CARD ──────────────────────────────────
 function mkCard(p){
   var card = document.createElement("div");
   card.className = "card";
@@ -297,7 +302,7 @@ function mkCard(p){
   // Admin edit button
   var editBtn = document.createElement("button");
   editBtn.className = "prod-edit-btn";
-  editBtn.textContent = "✏ Editar";
+  editBtn.textContent = "? Editar";
   editBtn.onclick = function(e){ e.stopPropagation(); openProductEdit(p.ref); };
   imgBox.appendChild(editBtn);
   if(p.active === false){
@@ -329,7 +334,7 @@ function mkCard(p){
   var body = document.createElement("div");
   body.className = "body";
 
-  var pvpStr = p.pvp ? "P.V.P: " + p.pvp.toFixed(2).replace(".",",") + "€" : "";
+  var pvpStr = p.pvp ? "P.V.P: " + p.pvp.toFixed(2).replace(".",",") + "�" : "";
 
   // cor select
   var corSel = document.createElement("select");
@@ -356,7 +361,7 @@ function mkCard(p){
     "<div class='ref'>Ref. " + p.ref + "</div>" +
     "<div class='nm'>" + p.name + "</div>" +
     "<div class='tp'>" + p.type + "</div>" +
-    "<div class='pr-row'><span class='pr'>" + p.price.toFixed(2).replace(".",",") + "€</span><span class='pvp'>" + pvpStr + "</span></div>" +
+    "<div class='pr-row'><span class='pr'>" + p.price.toFixed(2).replace(".",",") + "�</span><span class='pvp'>" + pvpStr + "</span></div>" +
     "<div class='meta'><b>Cores:</b> " + p.cores.join(", ") + "<br><b>Tam.:</b> " + p.tams.join(", ") + "</div>";
 
   var frow = document.createElement("div");
@@ -393,7 +398,7 @@ function mkCard(p){
   return card;
 }
 
-// â”€â”€ EVENT DELEGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── EVENT DELEGATION ──────────────────────────
 document.getElementById("main").addEventListener("click", function(e){
   var el = e.target;
   // image quick-add
@@ -428,7 +433,7 @@ document.getElementById("main").addEventListener("change", function(e){
   input.value = normalizeQtyValue(ref, input.value);
 });
 
-// â”€â”€ ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ACTIONS ────────────────────────────────────
 function isPack(ref){
   var p = PRODS[ref];
   return p && p.type && p.type.toLowerCase().indexOf("pack") >= 0;
@@ -544,18 +549,18 @@ function renderCart(){
   var cnt=0,tot=0; cart.forEach(function(c){cnt+=c.qty;tot+=c.price*c.qty;});
   var missing = Math.max(0, MIN_ORDER_TOTAL - tot);
   document.getElementById("cart-n").textContent=cnt;
-  document.getElementById("tamt").textContent=tot.toFixed(2).replace(".",",")+"€";
+  document.getElementById("tamt").textContent=tot.toFixed(2).replace(".",",")+"�";
   var minEl = document.getElementById("tmin");
   if(minEl){
     if(cart.length===0){
       minEl.className = "tmin";
-      minEl.innerHTML = "Encomenda mínima: <b>" + MIN_ORDER_TOTAL.toFixed(2).replace(".",",") + " &euro;</b>";
+      minEl.innerHTML = "Encomenda m�nima: <b>" + MIN_ORDER_TOTAL.toFixed(2).replace(".",",") + " &euro;</b>";
     } else if(missing > 0){
       minEl.className = "tmin err";
-      minEl.innerHTML = "Faltam <b>" + missing.toFixed(2).replace(".",",") + " &euro;</b> para atingir a encomenda mínima de <b>" + MIN_ORDER_TOTAL.toFixed(2).replace(".",",") + " &euro;</b>.";
+      minEl.innerHTML = "Faltam <b>" + missing.toFixed(2).replace(".",",") + " &euro;</b> para atingir a encomenda m�nima de <b>" + MIN_ORDER_TOTAL.toFixed(2).replace(".",",") + " &euro;</b>.";
     } else {
       minEl.className = "tmin ok";
-      minEl.innerHTML = "Valor mínimo atingido. Já podes finalizar a encomenda.";
+      minEl.innerHTML = "Valor m�nimo atingido. J� podes finalizar a encomenda.";
     }
   }
   document.getElementById("pbtn").disabled=cart.length===0 || tot < MIN_ORDER_TOTAL;
@@ -572,8 +577,8 @@ function renderCart(){
     html+="<span class='ci-qval'>"+c.qty+"</span>";
     html+="<button class='ci-qbtn' data-qp='"+i+"'>+</button>";
     html+="</div>";
-    html+="<div class='ci-tot'>"+(c.qty*c.price).toFixed(2).replace(".",",")+"€</div>";
-    html+="<div style='font-size:11px;color:var(--muted)'>"+c.price.toFixed(2).replace(".",",")+"€/un</div>";
+    html+="<div class='ci-tot'>"+(c.qty*c.price).toFixed(2).replace(".",",")+"�</div>";
+    html+="<div style='font-size:11px;color:var(--muted)'>"+c.price.toFixed(2).replace(".",",")+"�/un</div>";
     html+="</div>";
     html+="<button class='ci-rm' data-idx='"+i+"'>&#10005;</button>";
     html+="</div>";
@@ -600,7 +605,7 @@ document.getElementById("citems").addEventListener("click",function(e){
   }
 });
 
-// â”€â”€ TABS / PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── TABS / PANEL ───────────────────────────────
 function switchCat(cat){
   activeCat=cat;
   document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.dataset.cat===cat);});
@@ -632,7 +637,7 @@ document.getElementById("ov").addEventListener("click",function(e){
   closeNotifications();
 });
 
-// â”€â”€ SEARCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SEARCH ─────────────────────────────────────
 var srchEl=document.getElementById("srch");
 var srchX=document.getElementById("srch-x");
 var srchInfo=document.getElementById("srch-info");
@@ -728,9 +733,9 @@ function askConfirm(opts){
   });
 }
 
-// â”€â”€ PRINT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PRINT ──────────────────────────────────────
 
-// â”€â”€ FINALIZE / OUTPUT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── FINALIZE / OUTPUT MODAL ───────────────────────────────────────────────
 document.getElementById("pbtn").addEventListener("click", function(){
   if(!cart.length) return;
   var total = cart.reduce(function(s,c){ return s+c.price*c.qty; },0);
@@ -754,7 +759,7 @@ document.getElementById("confirm-bg").addEventListener("click", function(e){
 });
 
 
-// URL do servidor â€” usa caminho relativo para funcionar com http e https
+// URL do servidor — usa caminho relativo para funcionar com http e https
 var BASE_URL = API_BASE_URL;
 var SERVER_URL = BASE_URL + "/encomenda";
 var sessionExpiryHandled = false;
@@ -775,7 +780,7 @@ function setLoginScreenActive(active){
 }
 
 function isSessionExpiredMessage(message){
-  return /sess[aã]o inv[aá]lida/i.test(String(message || ""));
+  return /sess[a�]o inv[a�]lida/i.test(String(message || ""));
 }
 
 function handleSessionExpired(message){
@@ -815,7 +820,7 @@ function handleSessionExpired(message){
   document.getElementById("login-screen").style.display = "flex";
   setLoginScreenActive(true);
   var err = document.getElementById("login-err");
-  err.textContent = message || "A sessão expirou. Volta a iniciar sessão.";
+  err.textContent = message || "A sess�o expirou. Volta a iniciar sess�o.";
   err.classList.add("on");
   document.getElementById("l-pass").value = "";
   setTimeout(function(){
@@ -830,7 +835,7 @@ window.fetch = function(input, init){
     return res.clone().json().catch(function(){ return {}; }).then(function(data){
       var message = data && data.message ? data.message : "";
       if(res.status === 401 || isSessionExpiredMessage(message)){
-        handleSessionExpired(message || "A sessão expirou. Volta a iniciar sessão.");
+        handleSessionExpired(message || "A sess�o expirou. Volta a iniciar sess�o.");
       }
       return res;
     });
@@ -922,7 +927,7 @@ document.getElementById("mo-wa").addEventListener("click", function(){
   doWhatsApp();
 });
 
-// â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── HELPERS ───────────────────────────────────────────────────────────────
 function getOrderMeta(){
   return {
     name:  document.getElementById("cname").value  || "",
@@ -974,7 +979,7 @@ function buildPrintHTML(m){
     +"@media print{.prtbtn{display:none}.doc-head,.doc-foot{display:block}}"
     +"</style></head><body>"
     +"<div class='doc-head'><div style='display:flex;justify-content:space-between;align-items:center'><span>Villas&reg; Nota de Encomenda</span><span>"+m.date+" "+m.time+"</span></div></div>"
-    +"<div class='doc-foot'><div style='display:flex;justify-content:space-between;align-items:center'><span>VÍTOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</span><span>Página <span class='page-num'></span> / <span class='page-total'></span></span></div></div>"
+    +"<div class='doc-foot'><div style='display:flex;justify-content:space-between;align-items:center'><span>V�TOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</span><span>P�gina <span class='page-num'></span> / <span class='page-total'></span></span></div></div>"
     +"<div class='doc-shell'>"
     +"<h1 style='font-family:Georgia,serif;font-size:28px;border-bottom:2px solid #c9a84c;padding-bottom:8px;margin-bottom:4px'>Villas&reg;</h1>"
     +"<p style='font-size:10px;color:#888;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px'>Outono/Inverno 2025&middot;2026 &mdash; Nota de Encomenda</p>"
@@ -987,7 +992,7 @@ function buildPrintHTML(m){
     +notesHtml
     +"<table><thead><tr style='background:#f7f4ef;border-top:1px solid #e2ddd5;border-bottom:1px solid #e2ddd5'>"
     +"<th style='color:#6c6458;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Ref.</th>"
-    +"<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Descrição</th>"
+    +"<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Descri��o</th>"
     +"<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Tipo</th>"
     +"<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Cor</th>"
     +"<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Tam.</th>"
@@ -996,17 +1001,17 @@ function buildPrintHTML(m){
     +"<th style='color:#6c6458;padding:8px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Total</th>"
     +"</tr></thead><tbody>"+rows+"</tbody></table>"
     +"<div style='text-align:right;padding:12px 0;border-top:2px solid #c9a84c;margin-bottom:20px'>"
-    +"<div style='font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>Total (preço de custo)</div>"
+    +"<div style='font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>Total (pre�o de custo)</div>"
     +"<div style='font-size:22px;font-weight:700'>"+m.total.toFixed(2).replace(".",",")+" &euro;</div>"
     +"<div style='font-size:11px;color:#888;margin-top:2px'>"+m.units+" unidades &middot; "+m.lines+" linhas</div>"
     +"</div>"
-    +"<div style='font-size:10px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px;margin-bottom:20px'>VÍTOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</div>"
+    +"<div style='font-size:10px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px;margin-bottom:20px'>V�TOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</div>"
     +"</div>"
     +"<button class='prtbtn' onclick='window.print()'>\uD83D\uDDA8 IMPRIMIR</button>"
     +"</body></html>";
 }
 
-// â”€â”€ PRINT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PRINT ─────────────────────────────────────────────────────────────────
 function doPrint(){
   var m = getOrderMeta();
   var win = window.open("","_blank","width=960,height=700,scrollbars=yes");
@@ -1015,7 +1020,7 @@ function doPrint(){
   win.document.close();
 }
 
-// â”€â”€ EMAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── EMAIL ─────────────────────────────────────────────────────────────────
 function doEmail(){
   var m = getOrderMeta();
   var subject = encodeURIComponent("Encomenda Villas - "+(m.name||"Cliente")+" - "+m.date);
@@ -1029,16 +1034,16 @@ function doEmail(){
     +lines+"\n\n"
     +"Total: "+m.total.toFixed(2).replace(".",",")+"EUR ("+m.units+" unidades)"
     +(m.notes?"\n\nNotas: "+m.notes:"")
-    +"\n\nCom os melhores cumprimentos,\nVítor Gouveia\n+351 968 350 394"
+    +"\n\nCom os melhores cumprimentos,\nV�tor Gouveia\n+351 968 350 394"
   );
   window.location.href = "mailto:?subject="+subject+"&body="+body;
 }
 
-// â”€â”€ CSV / EXCEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CSV / EXCEL ───────────────────────────────────────────────────────────
 function doCSV(){
   var m = getOrderMeta();
   var bom = "\uFEFF"; // UTF-8 BOM for Excel
-  var header = "Ref.;Descrição;Tipo;Cor;Tamanho;Quantidade;P. Unitário;Total\n";
+  var header = "Ref.;Descri��o;Tipo;Cor;Tamanho;Quantidade;P. Unit�rio;Total\n";
   var rows = cart.map(function(c){
     return [c.ref, c.name, c.type, c.cor, c.tam, c.qty,
             c.price.toFixed(2).replace(".",","),
@@ -1056,23 +1061,23 @@ function doCSV(){
   URL.revokeObjectURL(url);
 }
 
-// â”€â”€ WHATSAPP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── WHATSAPP ──────────────────────────────────────────────────────────────
 function doWhatsApp(){
   var m = getOrderMeta();
   var lines = cart.map(function(c){
-    return "• Ref."+c.ref+" "+c.name+" | "+c.cor+" | "+c.tam+" | "+c.qty+"x = "+(c.price*c.qty).toFixed(2).replace(".",",")+"€";
+    return "� Ref."+c.ref+" "+c.name+" | "+c.cor+" | "+c.tam+" | "+c.qty+"x = "+(c.price*c.qty).toFixed(2).replace(".",",")+"�";
   }).join("\n");
   var msg = "*Encomenda Villas*\n"
     +(m.name?"*Cliente:* "+m.name+"\n":"")
     +(m.nif?"*NIF:* "+m.nif+"\n":"")
     +"*Data:* "+m.date+" "+m.time+"\n\n"
     +lines+"\n\n"
-    +"*Total: "+m.total.toFixed(2).replace(".",",")+"€* ("+m.units+" unidades)"
+    +"*Total: "+m.total.toFixed(2).replace(".",",")+"�* ("+m.units+" unidades)"
     +(m.notes?"\n\n_Notas: "+m.notes+"_":"");
   window.open("https://wa.me/?text="+encodeURIComponent(msg),"_blank");
 }
 
-// â”€â”€ LOCAL SAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── LOCAL SAVE ──────────────────────────────────────────────
 var HIST_KEY = "villas_hist";
 
 function saveToHistory(){
@@ -1102,7 +1107,7 @@ function loadHistory(){
     return raw ? JSON.parse(raw) : [];
   } catch(e){ return []; }
 }
-// â”€â”€ CLIENTS / LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CLIENTS / LOGIN ───────────────────────────────────────────────────────
 // Para adicionar clientes: {user, pass, name, nif}
 
 var CLIENTS = [];
@@ -1132,13 +1137,13 @@ function updateAreaButton(){
   if(!btn) return;
   if(!loggedClient){
     btn.classList.remove("on");
-    btn.innerHTML = "&#9881; Área";
+    btn.innerHTML = "&#9881; �rea";
     return;
   }
   btn.classList.add("on");
   btn.innerHTML = isDeveloper()
     ? "&#128736; Painel Dev"
-    : (loggedClient.admin ? "&#9881; Área Admin" : "&#128100; A Minha Área");
+    : (loggedClient.admin ? "&#9881; �rea Admin" : "&#128100; A Minha �rea");
 }
 
 function updateUserGreeting(){
@@ -1189,12 +1194,12 @@ function renderNotificationsPanel(){
   var body = document.getElementById("notif-body");
   if(!body) return;
   if(!ADMIN_NOTIFICATIONS.length){
-    body.innerHTML = "<div class='area-empty'>Sem notificações ativas neste momento.</div>";
+    body.innerHTML = "<div class='area-empty'>Sem notifica��es ativas neste momento.</div>";
     return;
   }
   body.innerHTML = ADMIN_NOTIFICATIONS.map(function(note){
     return "<article class='notif-item'>"
-      + "<h4>" + escH(note.title || "Atualização") + "</h4>"
+      + "<h4>" + escH(note.title || "Atualiza��o") + "</h4>"
       + "<p>" + escH(note.body || "") + "</p>"
       + "<time>" + formatDevDate(note.criado_em) + "</time>"
       + "</article>";
@@ -1232,10 +1237,10 @@ function renderDeveloperStats(){
     { label:"Encomendas", value: summary.encomendas || 0 },
     { label:"Notas ativas", value: summary.notificacoesAtivas || 0 },
     { label:"Falhas login 7 dias", value: summary.falhasLogin7d || 0 },
-    { label:"Sessões ativas", value: summary.sessoesAtivas || 0 }
+    { label:"Sess�es ativas", value: summary.sessoesAtivas || 0 }
   ];
   el.innerHTML = stats.map(function(item){
-    return "<div class='dev-stat'><small>" + escH(item.label) + "</small><strong>" + escH(String(item.value)) + "</strong><span>Atualização rápida do painel técnico.</span></div>";
+    return "<div class='dev-stat'><small>" + escH(item.label) + "</small><strong>" + escH(String(item.value)) + "</strong><span>Atualiza��o r�pida do painel t�cnico.</span></div>";
   }).join("");
 }
 
@@ -1245,8 +1250,8 @@ function renderDeveloperHealth(){
   var status = DEV_STATUS_DATA || {};
   var items = [
     { title:"Servidor", body: status.servidor === "online" ? "Online e a responder." : "Sem estado conhecido." },
-    { title:"Email SMTP", body: status.smtpReady ? "Ligação pronta para envio de emails." : (status.smtpMessage || "SMTP com aviso ou sem validação.") },
-    { title:"Sessões ativas", body: String(status.sessoesAtivas || 0) + " sessões ativas neste momento." }
+    { title:"Email SMTP", body: status.smtpReady ? "Liga��o pronta para envio de emails." : (status.smtpMessage || "SMTP com aviso ou sem valida��o.") },
+    { title:"Sess�es ativas", body: String(status.sessoesAtivas || 0) + " sess�es ativas neste momento." }
   ];
   list.innerHTML = items.map(function(item){
     return "<article class='dev-log'><h4>" + escH(item.title) + "</h4><p>" + escH(item.body) + "</p></article>";
@@ -1257,7 +1262,7 @@ function renderDeveloperNotes(){
   var list = document.getElementById("dev-notes-list");
   if(!list) return;
   if(!DEV_NOTES.length){
-    list.innerHTML = "<div class='area-empty'>Ainda não há notas técnicas publicadas.</div>";
+    list.innerHTML = "<div class='area-empty'>Ainda n�o h� notas t�cnicas publicadas.</div>";
     return;
   }
   list.innerHTML = DEV_NOTES.map(function(note){
@@ -1265,7 +1270,7 @@ function renderDeveloperNotes(){
     return "<article class='dev-note'>"
       + "<h4>" + escH(note.title || "Nota") + "</h4>"
       + "<p>" + escH(note.body || "") + "</p>"
-      + "<div class='dev-meta'>" + escH(note.audience === "all" ? "Todos" : "Admins") + " · " + formatDevDate(note.criado_em) + " · " + escH(active ? "Ativa" : "Inativa") + "</div>"
+      + "<div class='dev-meta'>" + escH(note.audience === "all" ? "Todos" : "Admins") + " � " + formatDevDate(note.criado_em) + " � " + escH(active ? "Ativa" : "Inativa") + "</div>"
       + "<div class='dev-actions' style='margin-top:10px'>"
       + "<button class='dev-btn' data-dev-note-toggle='" + escAttr(String(note.id)) + "' data-dev-note-active='" + (active ? "0" : "1") + "'>" + (active ? "Desativar" : "Ativar") + "</button>"
       + "<button class='dev-btn' data-dev-note-delete='" + escAttr(String(note.id)) + "'>Apagar</button>"
@@ -1284,7 +1289,7 @@ function renderDeveloperLogins(){
     failedList.innerHTML = DEV_LOGIN_LOGS.map(function(item){
       return "<article class='dev-log'>"
         + "<h4>" + escH(item.nome || item.user_input || "Tentativa de login") + "</h4>"
-        + "<p>" + escH("Falha no login" + (item.user_input ? " · utilizador " + item.user_input : "") + (item.ip ? " · IP " + item.ip : "")) + "</p>"
+        + "<p>" + escH("Falha no login" + (item.user_input ? " � utilizador " + item.user_input : "") + (item.ip ? " � IP " + item.ip : "")) + "</p>"
         + "<div class='dev-meta'>" + formatDevDate(item.criado_em) + "</div>"
         + "</article>";
     }).join("");
@@ -1296,7 +1301,7 @@ function renderDeveloperLogins(){
   allList.innerHTML = DEV_ALL_LOGINS.map(function(item){
     return "<article class='dev-log'>"
       + "<h4>" + escH(item.nome || item.user_input || "Tentativa de login") + "</h4>"
-      + "<p>" + escH((item.sucesso ? "Login com sucesso" : "Falha no login") + (item.user_input ? " · utilizador " + item.user_input : "") + (item.ip ? " · IP " + item.ip : "")) + "</p>"
+      + "<p>" + escH((item.sucesso ? "Login com sucesso" : "Falha no login") + (item.user_input ? " � utilizador " + item.user_input : "") + (item.ip ? " � IP " + item.ip : "")) + "</p>"
       + "<div class='dev-meta'>" + formatDevDate(item.criado_em) + "</div>"
       + "</article>";
   }).join("");
@@ -1306,16 +1311,16 @@ function renderDeveloperOrders(){
   var list = document.getElementById("dev-orders-list");
   if(!list) return;
   if(!DEV_RECENT_ORDERS.length){
-    list.innerHTML = "<div class='area-empty'>Ainda não há encomendas recentes para mostrar.</div>";
+    list.innerHTML = "<div class='area-empty'>Ainda n�o h� encomendas recentes para mostrar.</div>";
     return;
   }
   list.innerHTML = DEV_RECENT_ORDERS.map(function(order){
     return "<article class='dev-order'>"
       + "<h4>" + escH(order.client || "Cliente") + "</h4>"
-      + "<p>" + escH((order.date || "") + " " + (order.time || "") + " · " + (order.units || 0) + " unidades · " + (order.lines || 0) + " linhas") + "</p>"
+      + "<p>" + escH((order.date || "") + " " + (order.time || "") + " � " + (order.units || 0) + " unidades � " + (order.lines || 0) + " linhas") + "</p>"
       + "<div class='dev-actions'>"
       + "<button class='dev-btn' data-dev-order-open='" + escAttr(String(order.id)) + "'>PDF</button>"
-      + "<span class='dev-meta' style='display:flex;align-items:center'>" + escH("#" + order.id + " · " + Number(order.total || 0).toFixed(2).replace(".", ",") + " €") + "</span>"
+      + "<span class='dev-meta' style='display:flex;align-items:center'>" + escH("#" + order.id + " � " + Number(order.total || 0).toFixed(2).replace(".", ",") + " �") + "</span>"
       + "</div>"
       + "</article>";
   }).join("");
@@ -1375,7 +1380,7 @@ function loadDeveloperDashboard(){
     renderDeveloperDashboard();
   })
   .catch(function(){
-    setDevStatus("Não foi possível carregar o painel técnico.", "err");
+    setDevStatus("N�o foi poss�vel carregar o painel t�cnico.", "err");
     renderDeveloperDashboard();
   });
 }
@@ -1396,10 +1401,10 @@ function saveDeveloperNote(){
   var body = (document.getElementById("dev-note-body").value || "").trim();
   var audience = document.getElementById("dev-note-audience").value || "admin";
   if(!title || !body){
-    setDevStatus("Preenche o título e o conteúdo da nota.", "err");
+    setDevStatus("Preenche o t�tulo e o conte�do da nota.", "err");
     return;
   }
-  setDevStatus("A publicar nota técnica...", "");
+  setDevStatus("A publicar nota t�cnica...", "");
   fetch(BASE_URL + "/dev/notes", {
     method:"POST",
     headers:{ "Content-Type":"application/json", "X-Token": authToken||"" },
@@ -1407,14 +1412,14 @@ function saveDeveloperNote(){
   })
   .then(function(r){ return r.json(); })
   .then(function(res){
-    if(!res.ok) throw new Error(res.message || "Não foi possível publicar a nota.");
+    if(!res.ok) throw new Error(res.message || "N�o foi poss�vel publicar a nota.");
     document.getElementById("dev-note-title").value = "";
     document.getElementById("dev-note-body").value = "";
     setDevStatus("Nota publicada com sucesso.", "ok");
     return Promise.all([loadDeveloperDashboard(), loadAdminNotifications()]);
   })
   .catch(function(err){
-    setDevStatus(err.message || "Não foi possível publicar a nota.", "err");
+    setDevStatus(err.message || "N�o foi poss�vel publicar a nota.", "err");
   });
 }
 
@@ -1427,18 +1432,18 @@ function toggleDeveloperNote(noteId, nextActive){
   })
   .then(function(r){ return r.json(); })
   .then(function(res){
-    if(!res.ok) throw new Error(res.message || "Não foi possível atualizar a nota.");
+    if(!res.ok) throw new Error(res.message || "N�o foi poss�vel atualizar a nota.");
     return Promise.all([loadDeveloperDashboard(), loadAdminNotifications()]);
   })
   .catch(function(err){
-    setDevStatus(err.message || "Não foi possível atualizar a nota.", "err");
+    setDevStatus(err.message || "N�o foi poss�vel atualizar a nota.", "err");
   });
 }
 
 function deleteDeveloperNote(noteId){
   askConfirm({
     title: "Apagar nota",
-    message: "Queres mesmo apagar esta nota técnica?",
+    message: "Queres mesmo apagar esta nota t�cnica?",
     confirmLabel: "Apagar",
     danger: true
   }).then(function(ok){
@@ -1449,21 +1454,21 @@ function deleteDeveloperNote(noteId){
     })
     .then(function(r){ return r.json(); })
     .then(function(res){
-      if(!res.ok) throw new Error(res.message || "Não foi possível apagar a nota.");
+      if(!res.ok) throw new Error(res.message || "N�o foi poss�vel apagar a nota.");
       setDevStatus("Nota apagada com sucesso.", "ok");
       return Promise.all([loadDeveloperDashboard(), loadAdminNotifications()]);
     })
     .catch(function(err){
-      setDevStatus(err.message || "Não foi possível apagar a nota.", "err");
+      setDevStatus(err.message || "N�o foi poss�vel apagar a nota.", "err");
     });
   });
 }
 
 function clearAllSessionsFromDev(){
   askConfirm({
-    title: "Forçar novo login",
-    message: "Isto vai invalidar todas as sessões ativas. Os utilizadores terão de voltar a iniciar sessão.",
-    confirmLabel: "Forçar logout",
+    title: "For�ar novo login",
+    message: "Isto vai invalidar todas as sess�es ativas. Os utilizadores ter�o de voltar a iniciar sess�o.",
+    confirmLabel: "For�ar logout",
     danger: true
   }).then(function(ok){
     if(!ok) return;
@@ -1473,12 +1478,12 @@ function clearAllSessionsFromDev(){
     })
     .then(function(r){ return r.json(); })
     .then(function(res){
-      if(!res.ok) throw new Error(res.message || "Não foi possível limpar as sessões.");
-      setDevStatus("Sessões limpas com sucesso.", "ok");
+      if(!res.ok) throw new Error(res.message || "N�o foi poss�vel limpar as sess�es.");
+      setDevStatus("Sess�es limpas com sucesso.", "ok");
       return loadDeveloperDashboard();
     })
     .catch(function(err){
-      setDevStatus(err.message || "Não foi possível limpar as sessões.", "err");
+      setDevStatus(err.message || "N�o foi poss�vel limpar as sess�es.", "err");
     });
   });
 }
@@ -1766,7 +1771,7 @@ function renderCategoryManager(){
     var count = (CAT_ITEMS[cat.id] || []).length;
     var isActive = cat.active !== false;
     return "<div class='cat-item" + (isActive ? "" : " is-off") + "' data-cat-id='" + escAttr(cat.id) + "'>" +
-      "<div class='cat-item-meta'><div><strong>" + escH(cat.label) + "</strong><span>" + count + " produto" + (count!==1?"s":"") + " nesta categoria" + (isActive ? "" : " · desativada") + "</span></div></div>" +
+      "<div class='cat-item-meta'><div><strong>" + escH(cat.label) + "</strong><span>" + count + " produto" + (count!==1?"s":"") + " nesta categoria" + (isActive ? "" : " � desativada") + "</span></div></div>" +
       "<div class='cat-item-actions'>" +
       "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='up'>&uarr;</button>" +
       "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='down'>&darr;</button>" +
@@ -2044,13 +2049,13 @@ function importCatalogData(file){
 function applyCollectionMode(mode){
   if(!loggedClient || !loggedClient.admin) return;
   var labels = {
-    verao: "Modo Verão",
+    verao: "Modo Ver�o",
     inverno: "Modo Inverno",
     todos: "Reativar Tudo"
   };
   askConfirm({
-    title: "Aplicar coleção",
-    message: "Queres aplicar \"" + (labels[mode] || mode) + "\" ao catálogo?",
+    title: "Aplicar cole��o",
+    message: "Queres aplicar \"" + (labels[mode] || mode) + "\" ao cat�logo?",
     confirmLabel: "Aplicar"
   }).then(function(ok){
     if(!ok) return;
@@ -2072,7 +2077,7 @@ function applyCollectionMode(mode){
 }
 
 function formatMoney(value){
-  return Number(value || 0).toFixed(2).replace(".", ",") + "€";
+  return Number(value || 0).toFixed(2).replace(".", ",") + "�";
 }
 
 function formatDateTime(iso, fallbackDate, fallbackTime){
@@ -2102,7 +2107,7 @@ function buildOrderCard(order, opts){
   actions.push("<button class='ord-btn' data-order-open='" + order.id + "'>Ver detalhe</button>");
   actions.push("<button class='ord-btn' data-order-pdf='" + order.id + "'>PDF</button>");
   if(isAdminView){
-    actions.push("<button class='ord-btn' data-order-pdf='" + order.id + "' data-order-pdf-mode='sem_precos'>PDF s/ preços</button>");
+    actions.push("<button class='ord-btn' data-order-pdf='" + order.id + "' data-order-pdf-mode='sem_precos'>PDF s/ pre�os</button>");
   }
   if(isAdminView){
     actions.push("<button class='ord-btn danger' data-order-delete='" + order.id + "'>Eliminar</button>");
@@ -2133,7 +2138,7 @@ function renderOrderDetail(order, isAdminView){
   }).join("");
   var actions = "<div class='ord-actions'>"
     + "<button class='ord-btn' data-order-pdf='" + order.id + "'>Descarregar PDF</button>"
-    + (isAdminView ? "<button class='ord-btn' data-order-pdf='" + order.id + "' data-order-pdf-mode='sem_precos'>Descarregar PDF s/ preços</button>" : "")
+    + (isAdminView ? "<button class='ord-btn' data-order-pdf='" + order.id + "' data-order-pdf-mode='sem_precos'>Descarregar PDF s/ pre�os</button>" : "")
     + (isAdminView
       ? "<button class='ord-btn danger' data-order-delete='" + order.id + "'>Eliminar encomenda</button>"
       : "<button class='ord-btn primary' data-order-repeat='" + order.id + "'>Reencomendar esta encomenda</button>")
@@ -2212,7 +2217,7 @@ function buildAdminOrdersSection(){
   if(selectedOrderId){
     var match = ADMIN_ORDERS.find(function(order){ return order.id === selectedOrderId; });
     if(match){
-      detailHtml = "<div class='ord-detail-box'><strong>Encomenda selecionada</strong>Clica em <b>Ver detalhe</b> para abrir toda a informação da encomenda #" + match.id + ".</div>";
+      detailHtml = "<div class='ord-detail-box'><strong>Encomenda selecionada</strong>Clica em <b>Ver detalhe</b> para abrir toda a informa��o da encomenda #" + match.id + ".</div>";
     }
   }
   return "<div class='area-toolbar'>"
@@ -2232,12 +2237,12 @@ function renderAdminPanel(){
   var title = document.querySelector("#apanel .aph h2");
   var body = document.getElementById("abody");
   if(!loggedClient){
-    if(title) title.textContent = "Área";
-    body.innerHTML = "<div class='area-empty'>Faz login para aceder à tua área.</div>";
+    if(title) title.textContent = "�rea";
+    body.innerHTML = "<div class='area-empty'>Faz login para aceder � tua �rea.</div>";
     return;
   }
   if(loggedClient.admin){
-    if(title) title.textContent = "Área Admin";
+    if(title) title.textContent = "�rea Admin";
     body.innerHTML = areaTabsMarkup(true) + "<div class='area-empty'>A carregar...</div>";
     bindAreaPanelEvents();
     if(areaTab === "clientes"){
@@ -2247,7 +2252,7 @@ function renderAdminPanel(){
     }
     return;
   }
-  if(title) title.textContent = "A Minha Área";
+  if(title) title.textContent = "A Minha �rea";
   body.innerHTML = areaTabsMarkup(false) + "<div class='area-empty'>A carregar as tuas encomendas...</div>";
   bindAreaPanelEvents();
   renderUserOrders();
@@ -2327,7 +2332,7 @@ function renderAdminOrders(){
 function deleteAdminOrder(orderId){
   askConfirm({
     title: "Eliminar encomenda",
-    text: "Tens a certeza que queres eliminar esta encomenda? Esta ação não pode ser anulada.",
+    text: "Tens a certeza que queres eliminar esta encomenda? Esta a��o n�o pode ser anulada.",
     confirmText: "Eliminar",
     danger: true
   }).then(function(ok){
@@ -2338,13 +2343,13 @@ function deleteAdminOrder(orderId){
     })
     .then(function(r){ return r.json(); })
     .then(function(res){
-      if(!res.ok) throw new Error(res.message || "Não foi possível eliminar a encomenda.");
+      if(!res.ok) throw new Error(res.message || "N�o foi poss�vel eliminar a encomenda.");
       ADMIN_ORDERS = ADMIN_ORDERS.filter(function(order){ return order.id !== orderId; });
       if(selectedOrderId === orderId) selectedOrderId = null;
       renderAdminPanel();
     })
     .catch(function(err){
-      alert(err.message || "Não foi possível eliminar a encomenda.");
+      alert(err.message || "N�o foi poss�vel eliminar a encomenda.");
     });
   });
 }
@@ -2504,7 +2509,7 @@ function bindAreaPanelEvents(){
   });
 }
 
-// â”€â”€ ADMIN PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ADMIN PANEL ───────────────────────────────────────────────────────────
 function openAdmin(){
   if(!loggedClient) return;
   if(isDeveloper()){
@@ -2899,7 +2904,7 @@ function showAfErr(msg){
 function escH(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function escAttr(s){ return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;"); }
 
-// â”€â”€ PRODUCT OVERRIDES (admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PRODUCT OVERRIDES (admin) ─────────────────────────────────────────────
 var editingRef = null;
 function buildCategoryOptions(selectedCat){
   return CATS.map(function(c){
@@ -2947,8 +2952,8 @@ function fillProductForm(prod, img, showModified){
   if(deleteBtn) deleteBtn.style.display = editingRef === "__new__" ? "none" : "";
   if(resetBtn){
     if(editingRef === "__new__") resetBtn.textContent = "Limpar";
-    else if(BASE_PRODUCTS[editingRef]) resetBtn.textContent = "↻ Repor Original";
-    else resetBtn.textContent = "↻ Repor Guardado";
+    else if(BASE_PRODUCTS[editingRef]) resetBtn.textContent = "? Repor Original";
+    else resetBtn.textContent = "? Repor Guardado";
   }
 }
 function openProductEdit(ref){
