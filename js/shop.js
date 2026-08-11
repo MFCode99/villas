@@ -1,6 +1,8 @@
 if(typeof window.showInactiveProducts === "undefined"){
   window.showInactiveProducts = localStorage.getItem("villas_show_inactive_products") !== "0";
 }
+if(typeof window.loggedClient === "undefined") window.loggedClient = null;
+if(typeof window.authToken === "undefined") window.authToken = null;
 var CART_STORAGE_KEY = "villas_cart";
 var CART_SERVER_URL = "/me/cart";
 var cartSyncTimer = null;

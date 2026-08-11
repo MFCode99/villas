@@ -6,6 +6,8 @@ var API_BASE_URL = (function(){
   if(origin && origin !== "null" && protocol !== "file:") return origin;
   return "https://villas.mlabcorp.net";
 })();
+if(typeof window.loggedClient === "undefined") window.loggedClient = null;
+if(typeof window.authToken === "undefined") window.authToken = null;
 
 function inferQtyStep(prod){
   var explicit = parseInt(prod && (prod.qtdStep != null ? prod.qtdStep : prod.qtd_step), 10);
@@ -291,7 +293,7 @@ if(!Object.keys(PRODS).length){
 
 function reloadCatalogFromServer(){
   var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token") || "";
-  var isAdminSession = !!(loggedClient && loggedClient.admin);
+  var isAdminSession = !!(window.loggedClient && window.loggedClient.admin);
   return fetch(API_BASE_URL + (isAdminSession ? "/admin/produtos" : "/produtos"), {
     headers: isAdminSession && savedToken ? { "X-Token": savedToken } : {}
   })
@@ -315,7 +317,7 @@ function reloadCatalogFromServer(){
 }
 
 function reloadCategoriesFromServer(){
-  if(!(loggedClient && loggedClient.admin)) return Promise.resolve(false);
+  if(!(window.loggedClient && window.loggedClient.admin)) return Promise.resolve(false);
   return fetch(API_BASE_URL + "/admin/categorias", {
     headers: { "X-Token": authToken || "" }
   })

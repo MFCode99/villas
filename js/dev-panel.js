@@ -11,8 +11,11 @@
 function closeNotifications(){
   var panel = document.getElementById("notif-panel");
   if(panel) panel.classList.remove("on");
-  if(!document.getElementById("panel").classList.contains("on") && !document.getElementById("apanel").classList.contains("on")){
-    document.getElementById("ov").classList.remove("on");
+  var cartPanel = document.getElementById("panel");
+  var adminPanel = document.getElementById("apanel");
+  var ov = document.getElementById("ov");
+  if(ov && !(cartPanel && cartPanel.classList.contains("on")) && !(adminPanel && adminPanel.classList.contains("on"))){
+    ov.classList.remove("on");
   }
 }
 
@@ -35,7 +38,7 @@ function renderNotificationsPanel(){
 function openNotifications(){
   if(!(loggedClient && loggedClient.admin && !loggedClient.developer)) return;
   closeCartPanel();
-  closeAdmin();
+  if(typeof closeAdminSettings === "function") closeAdminSettings();
   renderNotificationsPanel();
   document.getElementById("notif-panel").classList.add("on");
   document.getElementById("ov").classList.add("on");
