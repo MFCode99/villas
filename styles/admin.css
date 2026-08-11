@@ -271,8 +271,8 @@
   .smtp-field input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,.12);}
   .smtp-field small{font-size:11px;color:var(--muted);}
   .smtp-field-full{grid-column:1/-1;}
-  .smtp-actions{display:flex;justify-content:flex-start;}
-  .smtp-save{min-width:240px;}
+  .smtp-actions{display:flex;justify-content:flex-start;gap:8px;flex-wrap:wrap;}
+  .smtp-actions .set-action{min-width:240px;}
   .smtp-feedback{min-height:18px;font-size:12px;color:var(--muted);}
   .smtp-feedback.ok{color:var(--success);}
   .smtp-feedback.err{color:var(--danger);}
@@ -384,7 +384,7 @@
   .pedit-btns,.ord-actions,.mail-actions,.confirm-actions{flex-wrap:wrap;}
   .pedit-btns{padding:12px 16px;}
   .pedit-btns > *,.mail-actions > *{flex:1 1 100%;}
-  .smtp-save{min-width:0;width:100%;}
+  .smtp-actions .set-action{min-width:0;width:100%;}
   .db-actions .set-action{width:100%;}
 }
 

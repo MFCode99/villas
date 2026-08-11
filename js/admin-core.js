@@ -110,6 +110,7 @@ function initAdminUiBindings(){
   var settingsExport = document.getElementById("settings-export");
   var settingsImport = document.getElementById("settings-import");
   var settingsImportFile = document.getElementById("settings-import-file");
+  var smtpHelp = document.getElementById("smtp-help");
   var smtpSave = document.getElementById("smtp-save");
   var smtpFrom = document.getElementById("smtp-email-from");
   var smtpTo = document.getElementById("smtp-email-to");
@@ -166,6 +167,7 @@ function initAdminUiBindings(){
     if(file) importCatalogData(file);
     this.value = "";
   });
+  if(smtpHelp) smtpHelp.addEventListener("click", openSmtpHelp);
   if(smtpSave) smtpSave.addEventListener("click", saveAdminEmailSettings);
   [smtpFrom, smtpTo, smtpPass].forEach(function(field){
     if(!field) return;

@@ -287,6 +287,15 @@ function saveAdminEmailSettings(){
     setSmtpFeedback(err.message || "Nao foi possivel atualizar o SMTP.", "err");
   });
 }
+function openSmtpHelp(){
+  setSmtpFeedback(
+    "Se a password der erro, faz isto: 1) ativa a Verificação em dois passos; 2) cria uma Senha de app; 3) cola essa senha aqui no campo Password / app password.",
+    ""
+  );
+  window.open("https://myaccount.google.com/security", "_blank", "noopener,noreferrer");
+  window.open("https://myaccount.google.com/apppasswords", "_blank", "noopener,noreferrer");
+  window.open("https://support.google.com/mail/answer/185833", "_blank", "noopener,noreferrer");
+}
 function renderCategoryManager(){
   var listEl = document.getElementById("category-list");
   if(!listEl) return;
