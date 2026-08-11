@@ -189,6 +189,17 @@ async function ensureSchemaFixes() {
     if (!devColRows.length) {
       await db.execute(`ALTER TABLE clientes ADD COLUMN developer TINYINT(1) DEFAULT 0`);
     }
+    const [loginColRows] = await db.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'clientes'
+         AND COLUMN_NAME = 'ultimo_login'`,
+      [CONFIG.db.database]
+    );
+    if (!loginColRows.length) {
+      await db.execute(`ALTER TABLE clientes ADD COLUMN ultimo_login DATETIME DEFAULT NULL`);
+    }
 
     const defaultCategories = [
       ['Soquetes', 'Soquetes', 0],
