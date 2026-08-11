@@ -422,6 +422,7 @@ tbody tr:last-child td{border-bottom:none;}
 .pbtn{width:100%;padding:13px;background:var(--ink);color:#fff;border:none;border-radius:14px;font-family:"DM Sans",sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:transform .15s,background .2s,box-shadow .2s;box-shadow:0 10px 24px rgba(0,0,0,.1);}
 .pbtn:hover{background:#2b2927;transform:translateY(-1px);}
 .pbtn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none;}
+.pfooter .pbtn + .pbtn{margin-top:10px;}
 @media (max-width: 640px){
   .panel{width:100vw;}
   .cart-summary{flex-direction:column;}
