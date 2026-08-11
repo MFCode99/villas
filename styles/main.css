@@ -6,6 +6,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0;}
 body{font-family:"DM Sans",sans-serif;background:var(--cream);color:var(--ink);}
 html.login-active,body.login-active{height:100%;overflow:hidden;overscroll-behavior:none;}
 body.login-active{position:fixed;inset:0;width:100%;}
+html.auth-checking .login-screen{visibility:hidden;opacity:0;pointer-events:none;}
 
 .hdr{background:linear-gradient(180deg,#1a1a1a 0%,#121212 100%);color:#fff;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:18px;position:sticky;top:0;z-index:200;box-shadow:0 10px 28px rgba(0,0,0,.18);}
 .logo{display:inline-flex;align-items:flex-end;justify-content:center;gap:3px;min-width:0;padding:8px 0 8px 14px;position:relative;font-family:"Playfair Display",serif;font-size:30px;line-height:.92;color:var(--gold);letter-spacing:1.2px;text-decoration:none;text-shadow:0 1px 12px rgba(201,168,76,.18);}

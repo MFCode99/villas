@@ -1432,7 +1432,7 @@ async function handleRequest(req, res) {
     return;
   }
   // Servir app
-  if (req.method === 'GET' && (url==='/'||url==='/index.html')) {
+  if (req.method === 'GET' && (url==='/'||url==='/index.html'||url==='/catalogo'||url==='/entrar'||url==='/admin')) {
     try {
       const html = fs.readFileSync(CONFIG.appFile, 'utf8');
       res.writeHead(200, {

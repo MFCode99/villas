@@ -107,6 +107,7 @@ function applyAuthenticatedState(client){
   var loginScreen = document.getElementById("login-screen");
   if(loginScreen) loginScreen.style.display="none";
   if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
+  finishAuthCheck();
   if(typeof setDeveloperMode === "function") setDeveloperMode(!!(client && client.developer));
   var n = client && (client.name || client.nome || "");
   if(n){
@@ -181,6 +182,7 @@ function bootstrapSessionFromServer(){
     if(errBox) errBox.classList.remove("on");
     if(typeof updateUserGreeting === "function") updateUserGreeting();
     if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
+    finishAuthCheck();
     if(typeof setMobileCompact === "function") setMobileCompact(false);
     if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
     var loginUser = document.getElementById("l-user");
@@ -279,6 +281,7 @@ function loginSuccess(client){
     var loginScreen2 = document.getElementById("login-screen");
     if(loginScreen2) loginScreen2.style.display = "";
     if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
+    finishAuthCheck();
   } finally {
     if(btn){
       btn.disabled = false;
@@ -309,5 +312,6 @@ setTimeout(function(){
     bootstrapSessionFromServer().catch(function(){ return false; });
     return;
   }
+  finishAuthCheck();
 }, 50);
 
