@@ -213,6 +213,10 @@ function applyCategoryList(categories, preserveExistingItems){
   return true;
 }
 
+function shouldSkipInitialCatalogBootstrap(){
+  return String(window.VILLAS_INITIAL_VIEW || "").toLowerCase() === "login" && !window.loggedClient;
+}
+
 function loadCatalogFromServerSync(){
   try{
     var xhr = new XMLHttpRequest();
@@ -232,7 +236,7 @@ function loadCatalogFromServerSync(){
     applyCatalogResponse(res, false);
   }catch(e){}
 }
-loadCatalogFromServerSync();
+if(!shouldSkipInitialCatalogBootstrap()) loadCatalogFromServerSync();
 
 // index by ref
 var PRODS = {};
@@ -267,7 +271,7 @@ function rebuildCatalogState(){
 }
 rebuildCatalogState();
 
-if(!Object.keys(PRODS).length){
+if(!Object.keys(PRODS).length && !shouldSkipInitialCatalogBootstrap()){
   setTimeout(function(){
     reloadCatalogFromServer()
       .then(function(){
