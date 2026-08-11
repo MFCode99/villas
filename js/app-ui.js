@@ -31,7 +31,7 @@ function ensureCatalogReadyOnStartup(){
 }
 
 setTimeout(function(){
-  if(typeof bootstrapSessionFromServer === "function"){
+  if(typeof bootstrapSessionFromServer === "function" && typeof shouldAutoBootstrapSession === "function" && shouldAutoBootstrapSession()){
     bootstrapSessionFromServer().catch(function(){ return false; });
     return;
   }

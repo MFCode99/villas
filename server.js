@@ -1432,11 +1432,52 @@ async function handleRequest(req, res) {
     return;
   }
   // Servir app
-  if (req.method === 'GET' && (url==='/'||url==='/index.html'||url==='/catalogo'||url==='/entrar'||url==='/admin')) {
+  if (req.method === 'GET' && (url==='/'||url==='/index.html'||url==='/entrar')) {
     try {
       let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      const initialView = url === '/catalogo' ? 'catalog' : (url === '/admin' ? 'admin' : 'login');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-13";</script>', '<script>window.VILLAS_INITIAL_VIEW = "' + initialView + '";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-13";</script>');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-13";</script>', '<script>window.VILLAS_INITIAL_VIEW = "login";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-13";</script>');
+      res.writeHead(200, {
+        'Content-Type':'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      res.end(html);
+    } catch(e) { res.writeHead(404); res.end('App não encontrada'); }
+    return;
+  }
+
+  if (req.method === 'GET' && url === '/catalogo') {
+    const session = getSessionFromReq(req);
+    if (!session) {
+      res.writeHead(302, { Location: '/entrar' });
+      res.end();
+      return;
+    }
+    try {
+      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-13";</script>', '<script>window.VILLAS_INITIAL_VIEW = "catalog";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-13";</script>');
+      res.writeHead(200, {
+        'Content-Type':'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      res.end(html);
+    } catch(e) { res.writeHead(404); res.end('App não encontrada'); }
+    return;
+  }
+
+  if (req.method === 'GET' && url === '/admin') {
+    const session = getSessionFromReq(req);
+    if (!session || !(session.admin || session.developer)) {
+      res.writeHead(302, { Location: '/entrar' });
+      res.end();
+      return;
+    }
+    try {
+      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
+      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-13";</script>', '<script>window.VILLAS_INITIAL_VIEW = "admin";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-13";</script>');
       res.writeHead(200, {
         'Content-Type':'text/html; charset=utf-8',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
