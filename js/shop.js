@@ -231,23 +231,21 @@ function normalizeCartItems(items){
 }
 function saveCartStateLocal(){
   try{
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(getCartSnapshot()));
+    // Cart state now lives on the server; keep this as a no-op for compatibility.
+    void localStorage;
   }catch(e){}
 }
 function saveCartState(){
   saveCartStateLocal();
-  scheduleCartSync();
+  pushCartStateToServer();
 }
 function loadCartState(){
-  try{
-    var raw = localStorage.getItem(CART_STORAGE_KEY);
-    if(!raw) return;
-    var data = JSON.parse(raw);
-    if(!Array.isArray(data)) return;
-    cart = normalizeCartItems(data);
-  }catch(e){
-    cart = [];
+  cart = [];
+  if(loggedClient && authToken){
+    syncCartFromServer().catch(function(){ return false; });
   }
+  renderCart();
+  refreshCartBadges();
 }
 function refreshCartBadges(){
   Object.keys(PRODS || {}).forEach(function(ref){
@@ -302,7 +300,6 @@ function pushCartStateToServer(){
 }
 function syncCartFromServer(){
   if(!loggedClient || !authToken) return Promise.resolve(false);
-  var localSnapshot = normalizeCartItems(cart);
   return window.fetch(CART_SERVER_URL, {
     method: "GET",
     cache: "no-store",
@@ -318,14 +315,7 @@ function syncCartFromServer(){
       if(!r.ok || !data.ok) return false;
       if(Array.isArray(data.cart)){
         var serverCart = normalizeCartItems(data.cart);
-        if(serverCart.length){
-          cart = serverCart;
-        } else if(localSnapshot.length){
-          return pushCartStateToServer().then(function(){ return true; });
-        } else {
-          cart = [];
-        }
-        saveCartStateLocal();
+        cart = serverCart;
         renderCart();
         refreshCartBadges();
         return true;
@@ -339,7 +329,6 @@ function clearCartEverywhere(){
   cart = [];
   clearTimeout(cartSyncTimer);
   cartSyncQueued = false;
-  saveCartStateLocal();
   renderCart();
   refreshCartBadges();
   if(!loggedClient || !authToken) return Promise.resolve(true);
@@ -669,9 +658,15 @@ function openCartPanel(){
   var panel = document.getElementById("panel");
   var ov = document.getElementById("ov");
   if(!panel || !ov) return;
-  renderCart();
   panel.classList.add("on");
   ov.classList.add("on");
+  if(loggedClient && authToken){
+    syncCartFromServer().catch(function(){ return false; }).then(function(){
+      renderCart();
+    });
+  } else {
+    renderCart();
+  }
 }
 
 function closeCartPanel(){
