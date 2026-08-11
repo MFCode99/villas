@@ -697,6 +697,11 @@ function toggleCartPanel(forceOpen){
   else openCartPanel();
 }
 
+window.__villasToggleCartPanel = function(forceOpen){
+  toggleCartPanel(forceOpen);
+  return false;
+};
+
 function bindCartPanelUi(){
   if(cartUiBound) return;
   cartUiBound = true;

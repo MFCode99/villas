@@ -1,4 +1,4 @@
-﻿var VILLAS_APP_VERSION = window.VILLAS_APP_VERSION || "20260811-10";
+﻿var VILLAS_APP_VERSION = window.VILLAS_APP_VERSION || "20260811-11";
 var VILLAS_STORAGE_VERSION_KEY = "villas_app_version";
 
 function escH(s){ return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
