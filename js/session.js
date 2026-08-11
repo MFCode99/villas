@@ -63,6 +63,11 @@ function setDeveloperMode(active){
   }, 0);
 }
 
+function finishAuthCheck(){
+  document.documentElement.classList.remove("auth-checking");
+  document.body.classList.remove("auth-checking");
+}
+
 function updateStickyOffsets(){
   var hdr = document.querySelector(".hdr");
   var srch = document.querySelector(".srch-wrap");
