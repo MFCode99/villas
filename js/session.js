@@ -204,6 +204,9 @@ function loginSuccess(client){
     if(typeof ensureCatalogReadyOnStartup === "function"){
       ensureCatalogReadyOnStartup();
     }
+    if(typeof syncCartFromServer === "function"){
+      syncCartFromServer().catch(function(){ return false; });
+    }
   } catch (err) {
     console.error("Login success flow failed:", err);
     try{

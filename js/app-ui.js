@@ -20,6 +20,9 @@ function ensureCatalogReadyOnStartup(){
     .then(function(){
       if(typeof refreshCatalogUi === "function") refreshCatalogUi();
       else if(typeof renderCatalogShell === "function") renderCatalogShell();
+      if(typeof syncCartFromServer === "function"){
+        return syncCartFromServer().catch(function(){ return false; });
+      }
     })
     .catch(function(){});
 }

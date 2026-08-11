@@ -119,6 +119,15 @@ async function ensureSchemaFixes() {
       )
     `);
     await db.execute(`
+      CREATE TABLE IF NOT EXISTS cart_states (
+        cliente_id   INT PRIMARY KEY,
+        payload      LONGTEXT NOT NULL,
+        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        expires_at   DATETIME NOT NULL,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+      )
+    `);
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS categorias (
         id            VARCHAR(80) PRIMARY KEY,
         label         VARCHAR(120) NOT NULL,
@@ -245,6 +254,7 @@ async function ensureSchemaFixes() {
        VALUES (?,?,?,?,?,?,0,1,1)`,
       ['vlsdev4729', 'Nv7k!Q2mL9', 'Programador Villas', '', '', '']
     );
+    await db.execute('DELETE FROM cart_states WHERE expires_at < NOW()');
   } catch (e) {
     console.log('Aviso ao validar schema:', e.message);
   }
@@ -670,6 +680,69 @@ function mapOrderItemRow(row) {
     price: Number(row.preco_unit || 0),
     total: Number(row.total_linha || 0)
   };
+}
+
+function normalizeCartItem(ref, item) {
+  const product = item && typeof item === 'object' ? item : {};
+  const cleanRef = String(ref || product.ref || '').trim();
+  if (!cleanRef) return null;
+  const qty = Math.max(1, parseInt(product.qty, 10) || 0);
+  const price = Number(product.price);
+  return {
+    key: String(product.key || `${cleanRef}|${String(product.cor || '').trim()}|${String(product.tam || '').trim()}`),
+    ref: cleanRef,
+    name: String(product.name || '').trim(),
+    type: String(product.type || '').trim(),
+    cor: String(product.cor || '').trim(),
+    tam: String(product.tam || '').trim(),
+    qty,
+    price: Number.isFinite(price) ? price : 0,
+    img: product.img ? String(product.img) : null
+  };
+}
+
+function normalizeCartPayload(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(function(item) {
+    return normalizeCartItem(item && item.ref, item);
+  }).filter(Boolean);
+}
+
+async function getCartState(clientId) {
+  const [rows] = await db.execute(
+    `SELECT payload, expires_at
+     FROM cart_states
+     WHERE cliente_id=? AND expires_at >= NOW()
+     LIMIT 1`,
+    [clientId]
+  );
+  if (!rows.length) {
+    await db.execute('DELETE FROM cart_states WHERE cliente_id=?', [clientId]);
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(rows[0].payload || '[]');
+    return normalizeCartPayload(parsed);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function saveCartState(clientId, items) {
+  const payload = JSON.stringify(normalizeCartPayload(items));
+  await db.execute(
+    `INSERT INTO cart_states (cliente_id,payload,expires_at)
+     VALUES (?,?,DATE_ADD(NOW(), INTERVAL 7 DAY))
+     ON DUPLICATE KEY UPDATE
+       payload=VALUES(payload),
+       expires_at=VALUES(expires_at),
+       updated_at=CURRENT_TIMESTAMP`,
+    [clientId, payload]
+  );
+}
+
+async function clearCartState(clientId) {
+  await db.execute('DELETE FROM cart_states WHERE cliente_id=?', [clientId]);
 }
 
 async function getOrderById(orderId, opts = {}) {
@@ -1268,6 +1341,7 @@ async function handleRequest(req, res) {
       const session = requireSession(req, false);
       const eid = await saveOrder(session.id, data);
       await sendEmail(data);
+      await clearCartState(session.id).catch(function() {});
       return sendJSON(res, 200, { ok:true, encId:eid, message:'Encomenda enviada com sucesso!' });
     } catch(e) {
       if (e.code === 'INVALID_CLIENT') {
@@ -1287,6 +1361,25 @@ async function handleRequest(req, res) {
     const session = requireSession(req, false);
     const encomendas = await listClientOrders(session.id);
     return sendJSON(res, 200, { ok:true, encomendas });
+  }
+
+  if (req.method === 'GET' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    const cart = await getCartState(session.id);
+    return sendJSON(res, 200, { ok:true, cart });
+  }
+
+  if (req.method === 'PUT' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    const cart = normalizeCartPayload(Array.isArray(data.cart) ? data.cart : (Array.isArray(data.items) ? data.items : []));
+    await saveCartState(session.id, cart);
+    return sendJSON(res, 200, { ok:true, cart });
+  }
+
+  if (req.method === 'DELETE' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    await clearCartState(session.id);
+    return sendJSON(res, 200, { ok:true, cart:[] });
   }
 
   const myOrderMatch = url.match(/^\/me\/encomendas\/(\d+)$/);
