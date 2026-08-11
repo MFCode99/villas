@@ -650,12 +650,21 @@ function formatMoney(value){
   return Number(value || 0).toFixed(2).replace(".", ",") + "€";
 }
 
+function parseLocalDateValue(value){
+  if(!value) return null;
+  if(value instanceof Date && !isNaN(value.getTime())) return value;
+  var str = String(value).trim();
+  if(!str) return null;
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) str = str.replace(" ", "T");
+  var d = new Date(str);
+  if(isNaN(d.getTime())) return null;
+  return d;
+}
+
 function formatDateTime(iso, fallbackDate, fallbackTime){
-  if(iso){
-    var d = new Date(iso);
-    if(!isNaN(d.getTime())){
-      return d.toLocaleDateString("pt-PT") + " " + d.toLocaleTimeString("pt-PT", { hour:"2-digit", minute:"2-digit" });
-    }
+  var d = parseLocalDateValue(iso);
+  if(d){
+    return d.toLocaleDateString("pt-PT") + " " + d.toLocaleTimeString("pt-PT", { hour:"2-digit", minute:"2-digit" });
   }
   return [fallbackDate || "", fallbackTime || ""].join(" ").trim();
 }
@@ -831,6 +840,7 @@ function buildClientsSection(){
       + "</div>"
       + (list.length ? "<div class='client-grid'>" + list.map(function(c,i){
         var index = CLIENTS.indexOf(c);
+        var lastLogin = formatDateTime(c.ultimo_login, "", "");
         return "<article class='cl-item'>"
           + "<div class='cl-avatar'>" + escH((c.name || c.user || "?").slice(0,1).toUpperCase()) + "</div>"
           + "<div class='cl-info'>"
@@ -838,6 +848,7 @@ function buildClientsSection(){
             + "<div class='cl-meta'>" + escH(c.user) + "</div>"
             + "<div class='cl-meta'>" + (c.nif ? "NIF " + escH(c.nif) : "Sem NIF") + (c.email ? " · " + escH(c.email) : "") + "</div>"
             + "<div class='cl-meta'><b>" + (c.total_encomendas || 0) + "</b> encomenda" + ((c.total_encomendas || 0)!==1 ? "s" : "") + " · " + escH(c.ativo !== false ? "Ativo" : "Inativo") + "</div>"
+            + "<div class='cl-meta'><b>Último login:</b> " + escH(lastLogin || "Nunca") + "</div>"
           + "</div>"
           + "<div class='cl-item-actions'>"
             + "<button class='cl-edit' data-ei='" + index + "'>Editar</button>"
@@ -949,7 +960,7 @@ function renderAdminClients(){
     CLIENTS = res.clientes.map(function(c){
       return {user:c.user,pass:c.pass,name:c.nome,nif:c.nif,admin:!!c.admin,id:c.id,
               ativo:c.activo !== false,email:c.email||'',telefone:c.telefone||'',
-              total_encomendas:c.total_encomendas||0};
+              total_encomendas:c.total_encomendas||0,ultimo_login:c.ultimo_login||null};
     });
     body.innerHTML = areaTabsMarkup(true) + buildClientsSection();
     bindAreaPanelEvents();
@@ -979,7 +990,7 @@ function renderAdminOrders(){
       CLIENTS = clientsRes.clientes.map(function(c){
         return {user:c.user,pass:c.pass,name:c.nome,nif:c.nif,admin:!!c.admin,id:c.id,
                 ativo:c.activo !== false,email:c.email||'',telefone:c.telefone||'',
-                total_encomendas:c.total_encomendas||0};
+                total_encomendas:c.total_encomendas||0,ultimo_login:c.ultimo_login||null};
       });
     }
     body.innerHTML = areaTabsMarkup(true) + buildAdminExtraSection();
@@ -1036,6 +1047,7 @@ function fillCartFromOrder(order){
   });
   renderCart();
   cart.forEach(function(item){ updateBadge(item.ref); });
+  if(typeof saveCartState === "function") saveCartState();
   closeAdmin();
   openCartPanel();
 }

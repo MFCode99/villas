@@ -1,4 +1,7 @@
-if(typeof window.showInactiveProducts === "undefined") window.showInactiveProducts = true;
+if(typeof window.showInactiveProducts === "undefined"){
+  window.showInactiveProducts = localStorage.getItem("villas_show_inactive_products") !== "0";
+}
+var CART_STORAGE_KEY = "villas_cart";
 
 // â”€â”€ BUILD CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function mkCard(p){
@@ -181,6 +184,52 @@ function normalizeQtyValue(ref, value){
 }
 function normalizeChoiceText(value){
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+}
+function saveCartState(){
+  try{
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart.map(function(item){
+      return {
+        key: item.key,
+        ref: item.ref,
+        name: item.name,
+        type: item.type,
+        cor: item.cor,
+        tam: item.tam,
+        qty: Number(item.qty || 0),
+        price: Number(item.price || 0),
+        img: item.img || null
+      };
+    })));
+  }catch(e){}
+}
+function loadCartState(){
+  try{
+    var raw = localStorage.getItem(CART_STORAGE_KEY);
+    if(!raw) return;
+    var data = JSON.parse(raw);
+    if(!Array.isArray(data)) return;
+    cart = data.map(function(item){
+      var ref = String(item && item.ref != null ? item.ref : "");
+      var prod = PRODS[ref] || {};
+      if(!ref || !prod.name && !item.name) return null;
+      var cor = normalizeChoiceText(item.cor);
+      var tam = normalizeChoiceText(item.tam);
+      var qty = normalizeQtyValue(ref, item.qty);
+      return {
+        key: item.key || cartItemKey(ref, cor, tam),
+        ref: ref,
+        name: item.name || prod.name || "",
+        type: item.type || prod.type || "",
+        cor: cor,
+        tam: tam,
+        qty: qty,
+        price: Number(item.price != null ? item.price : (prod.price || 0)),
+        img: item.img || IMGS[ref] || null
+      };
+    }).filter(Boolean);
+  }catch(e){
+    cart = [];
+  }
 }
 function cartItemKey(ref, cor, tam){
   return [ref, normalizeChoiceText(cor), normalizeChoiceText(tam)].join("|");
@@ -368,6 +417,7 @@ function addToCart(ref, corOverride, tamOverride, qtyOverride){
   showCartToast(p, cor, tam, qty);
   updateBadge(ref);
   renderCart();
+  saveCartState();
 }
 function showCartToast(product, cor, tam, qty){
   var toast = document.getElementById("cart-toast");
@@ -387,6 +437,7 @@ function removeFromCart(i){
   cart.splice(i,1);
   updateBadge(ref);
   renderCart();
+  saveCartState();
 }
 function updateBadge(ref){
   var tot=0; cart.forEach(function(c){if(c.ref===ref)tot+=c.qty;});
@@ -454,7 +505,7 @@ document.getElementById("citems").addEventListener("click",function(e){
   if(qp){ 
     var i=parseInt(qp.dataset.qp);
     var step = stepFor(cart[i].ref);
-    cart[i].qty += step; updateBadge(cart[i].ref); renderCart(); return;
+    cart[i].qty += step; updateBadge(cart[i].ref); renderCart(); saveCartState(); return;
   }
   var qm=e.target.closest("[data-qm]");
   if(qm){
@@ -462,8 +513,14 @@ document.getElementById("citems").addEventListener("click",function(e){
     var step = stepFor(cart[i].ref);
     var min  = minFor(cart[i].ref);
     cart[i].qty = Math.max(min, cart[i].qty - step);
-    updateBadge(cart[i].ref); renderCart(); return;
+    updateBadge(cart[i].ref); renderCart(); saveCartState(); return;
   }
+});
+
+loadCartState();
+renderCart();
+cart.forEach(function(item){
+  updateBadge(item.ref);
 });
 
 // â”€â”€ TABS / PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
