@@ -1432,7 +1432,13 @@ async function handleRequest(req, res) {
     return;
   }
   // Servir app
-  if (req.method === 'GET' && (url==='/'||url==='/index.html'||url==='/entrar')) {
+  if (req.method === 'GET' && (url==='/'||url==='/index.html')) {
+    res.writeHead(302, { Location: '/entrar' });
+    res.end();
+    return;
+  }
+
+  if (req.method === 'GET' && url==='/entrar') {
     try {
       let html = fs.readFileSync(CONFIG.appFile, 'utf8');
       html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-14";</script>', '<script>window.VILLAS_INITIAL_VIEW = "login";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-14";</script>');
