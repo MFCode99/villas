@@ -1,14 +1,17 @@
 ﻿// Focus user field on load
 try{
   if(typeof window.showInactiveProducts === "undefined"){
-    window.showInactiveProducts = localStorage.getItem("villas_show_inactive_products") !== "0";
+    window.showInactiveProducts = true;
   }
   if(typeof window.collectionMode === "undefined" || !window.collectionMode){
-    window.collectionMode = localStorage.getItem("villas_collection_mode") || "personalizada";
+    window.collectionMode = "personalizada";
   }
 }catch(e){}
 
 function ensureCatalogReadyOnStartup(){
+  if(typeof loadSiteSettingsFromServer === "function"){
+    loadSiteSettingsFromServer().catch(function(){ return false; });
+  }
   if(typeof reloadCatalogFromServer !== "function") return;
   reloadCatalogFromServer()
     .then(function(){
@@ -28,81 +31,11 @@ function ensureCatalogReadyOnStartup(){
 }
 
 setTimeout(function(){
-  try{
-    var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token");
-    var savedUser  = sessionStorage.getItem("villas_client") || localStorage.getItem("villas_client");
-    var expiresAt  = parseInt(localStorage.getItem("villas_session_expires")||"0", 10);
-    if(savedUser && expiresAt && Date.now() < expiresAt){
-      authToken = savedToken || "";
-      loggedClient = JSON.parse(savedUser);
-      localStorage.setItem("villas_session_expires", String(Date.now() + SESSION_TTL_MS));
-      var loginScreen = document.getElementById("login-screen");
-      if(loginScreen) loginScreen.style.display = "none";
-      if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
-      if(typeof setDeveloperMode === "function") setDeveloperMode(!!loggedClient.developer);
-      if(loggedClient.name){
-        var cname = document.getElementById("cname");
-        if(cname) cname.value = loggedClient.name;
-      }
-      if(loggedClient.nif){
-        var cnif = document.getElementById("cnif");
-        if(cnif) cnif.value = loggedClient.nif;
-      }
-      if(typeof updateAreaButton === "function") updateAreaButton();
-      if(typeof updateUserGreeting === "function") updateUserGreeting();
-      if(loggedClient.admin && !loggedClient.developer){
-        var adminSettingsBtn = document.getElementById("admin-settings-btn");
-        var newProdBtn = document.getElementById("new-prod-btn");
-        if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
-        if(newProdBtn) newProdBtn.classList.add("on");
-        if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
-        if(typeof loadAdminNotifications === "function") loadAdminNotifications();
-        if(typeof reloadCatalogFromServer === "function"){
-          reloadCatalogFromServer()
-            .catch(function(){ return false; })
-            .then(function(){
-              if(typeof reloadCategoriesFromServer === "function"){
-                return reloadCategoriesFromServer().catch(function(){ return false; });
-              }
-              return false;
-            })
-            .then(function(updated){
-              if(updated || Object.keys(PRODS||{}).length){
-                if(typeof refreshCatalogUi === "function") refreshCatalogUi();
-              }
-            })
-            .catch(function(){});
-        }
-      } else {
-        ADMIN_NOTIFICATIONS = [];
-        if(typeof updateNotificationButton === "function") updateNotificationButton();
-      }
-      if(loggedClient.developer){
-        if(typeof openDeveloperDashboard === "function") openDeveloperDashboard();
-      }
-      var logoutBtn = document.getElementById("logout-btn");
-      if(logoutBtn) logoutBtn.classList.add("on");
-      setTimeout(function(){
-        if(typeof updateStickyOffsets === "function") updateStickyOffsets();
-        if(typeof syncMobileCompactState === "function") syncMobileCompactState();
-      }, 0);
-      if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
-      return;
-    }
-  }catch(e){}
-  try{
-    sessionStorage.removeItem("villas_token");
-    sessionStorage.removeItem("villas_client");
-    localStorage.removeItem("villas_token");
-    localStorage.removeItem("villas_client");
-    localStorage.removeItem("villas_session_expires");
-  }catch(e){}
-  if(typeof updateUserGreeting === "function") updateUserGreeting();
+  if(typeof bootstrapSessionFromServer === "function"){
+    bootstrapSessionFromServer().catch(function(){ return false; });
+    return;
+  }
   if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
-  if(typeof setMobileCompact === "function") setMobileCompact(false);
-  if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
-  var loginUser = document.getElementById("l-user");
-  if(loginUser) loginUser.focus();
 }, 100);
 
 window.addEventListener("resize", updateStickyOffsets);
@@ -122,20 +55,18 @@ document.addEventListener("wheel", function(e){
 }, { passive:false });
 
 function doLogout(){
-  loggedClient = null;
-  authToken = null;
-  if(typeof sessionExpiryHandled !== "undefined") sessionExpiryHandled = false;
-  ADMIN_NOTIFICATIONS = [];
-  DEV_SUMMARY = null;
-  DEV_STATUS_DATA = null;
-  DEV_NOTES = [];
-  DEV_ALL_LOGINS = [];
-  DEV_LOGIN_LOGS = [];
-  DEV_RECENT_ORDERS = [];
-  clearStoredSession();
-  closeNotifications();
-  setDeveloperMode(false);
-  location.reload();
+  var finish = function(){
+    if(typeof sessionExpiryHandled !== "undefined") sessionExpiryHandled = false;
+    clearAuthenticatedState();
+    closeNotifications();
+    setDeveloperMode(false);
+    location.reload();
+  };
+  if(typeof logoutSessionOnServer === "function"){
+    logoutSessionOnServer().finally(finish);
+  } else {
+    finish();
+  }
 }
 
 function openAdminSettings(){
@@ -229,7 +160,7 @@ function updateCollectionSummary(){
   var products = Object.keys(PRODS || {}).map(function(ref){ return PRODS[ref]; }).filter(Boolean);
   var activeCount = products.filter(function(p){ return p.active !== false; }).length;
   var inactiveCount = products.length - activeCount;
-  var currentMode = window.collectionMode || localStorage.getItem("villas_collection_mode") || inferCollectionModeFromCatalog();
+  var currentMode = window.collectionMode || inferCollectionModeFromCatalog();
   window.collectionMode = currentMode;
   titleEl.textContent = getCollectionModeLabel(currentMode);
   textEl.textContent = activeCount + " produto" + (activeCount !== 1 ? "s" : "") + " ativos · " + inactiveCount + " inativo" + (inactiveCount !== 1 ? "s" : "");
@@ -240,24 +171,46 @@ function updateCollectionSummary(){
 }
 function loadCollectionModeFromServer(){
   if(!loggedClient || !loggedClient.admin) return Promise.resolve(false);
-  return fetch("/admin/produtos/colecao", {
+  return fetch("/admin/site-settings", {
+    cache: "no-store",
+    credentials: "same-origin",
     headers: { "X-Token": authToken || "" }
   })
   .then(function(r){ return r.json(); })
   .then(function(res){
     if(!res.ok) throw new Error(res.message || "Nao foi possivel carregar o modo de colecao.");
-    window.collectionMode = res.modo || "personalizada";
-    try{ localStorage.setItem("villas_collection_mode", window.collectionMode); }catch(e){}
+    if(res.collectionMode){
+      window.collectionMode = String(res.collectionMode || "personalizada").toLowerCase();
+    }
+    if(typeof res.showInactiveProducts !== "undefined"){
+      window.showInactiveProducts = !!res.showInactiveProducts;
+    }
     updateCollectionSummary();
+    updateInactiveToggleButton();
+    if(typeof refreshCatalogVisibility === "function") refreshCatalogVisibility();
     return true;
   })
   .catch(function(){ return false; });
 }
 function toggleInactiveProducts(){
-  window.showInactiveProducts = window.showInactiveProducts === false ? true : false;
-  try{ localStorage.setItem("villas_show_inactive_products", window.showInactiveProducts === false ? "0" : "1"); }catch(e){}
-  updateInactiveToggleButton();
-  if(typeof refreshCatalogVisibility === "function") refreshCatalogVisibility();
+  if(!loggedClient || !loggedClient.admin) return;
+  var nextValue = window.showInactiveProducts === false ? true : false;
+  fetch("/admin/site-settings", {
+    method: "PUT",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
+    body: JSON.stringify({ showInactiveProducts: nextValue })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    if(!res.ok) throw new Error(res.message || "Nao foi possivel guardar a visibilidade.");
+    window.showInactiveProducts = !!res.showInactiveProducts;
+    updateInactiveToggleButton();
+    if(typeof refreshCatalogVisibility === "function") refreshCatalogVisibility();
+    return true;
+  })
+  .catch(function(){ return false; });
 }
 function setSmtpStatusCard(status){
   var card = document.getElementById("smtp-status-card");
@@ -656,7 +609,6 @@ function applyCollectionMode(mode){
       if(!res.ok) throw new Error(res.message||"Nao foi possivel atualizar a colecao.");
       if(res.modo){
         window.collectionMode = res.modo;
-        try{ localStorage.setItem("villas_collection_mode", window.collectionMode); }catch(e){}
       }
       closeAdminSettings();
       updateCollectionSummary();

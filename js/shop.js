@@ -1,5 +1,5 @@
 if(typeof window.showInactiveProducts === "undefined"){
-  window.showInactiveProducts = localStorage.getItem("villas_show_inactive_products") !== "0";
+  window.showInactiveProducts = true;
 }
 if(typeof window.loggedClient === "undefined") window.loggedClient = null;
 if(typeof window.authToken === "undefined") window.authToken = null;
@@ -232,7 +232,6 @@ function normalizeCartItems(items){
 function saveCartStateLocal(){
   try{
     // Cart state now lives on the server; keep this as a no-op for compatibility.
-    void localStorage;
   }catch(e){}
 }
 function saveCartState(){
@@ -1062,13 +1061,9 @@ var SERVER_URL = BASE_URL + "/encomenda";
 var sessionExpiryHandled = false;
 
 function clearStoredSession(){
-  try{
-    sessionStorage.removeItem("villas_token");
-    sessionStorage.removeItem("villas_client");
-    localStorage.removeItem("villas_token");
-    localStorage.removeItem("villas_client");
-    localStorage.removeItem("villas_session_expires");
-  }catch(e){}
+  if(typeof clearAuthenticatedState === "function"){
+    clearAuthenticatedState();
+  }
 }
 
 function setLoginScreenActive(active){
@@ -1402,13 +1397,10 @@ function saveToHistory(){
   });
   // keep max 50 orders
   if(hist.length > 50) hist = hist.slice(0,50);
-  try{ localStorage.setItem(HIST_KEY, JSON.stringify(hist)); } catch(e){}
+  return hist;
 }
 
 function loadHistory(){
-  try{
-    var raw = localStorage.getItem(HIST_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch(e){ return []; }
+  return [];
 }
 

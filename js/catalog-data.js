@@ -184,7 +184,6 @@ function applyCatalogResponse(res, isAdminSession){
   });
   if(res.collectionMode){
     window.collectionMode = String(res.collectionMode || "personalizada").toLowerCase();
-    try{ localStorage.setItem("villas_collection_mode", window.collectionMode); }catch(e){}
   }
   syncBaseCatalogSnapshot();
   return true;
@@ -216,20 +215,11 @@ function applyCategoryList(categories, preserveExistingItems){
 
 function loadCatalogFromServerSync(){
   try{
-    var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token") || "";
-    var savedUser = sessionStorage.getItem("villas_client") || localStorage.getItem("villas_client");
-    var expiresAt = parseInt(localStorage.getItem("villas_session_expires")||"0", 10);
-    var savedClient = null;
-    if(savedUser && expiresAt && Date.now() < expiresAt){
-      try{ savedClient = JSON.parse(savedUser); }catch(err){}
-    }
-    var isAdminSession = !!(savedClient && savedClient.admin);
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", API_BASE_URL + (isAdminSession ? "/admin/produtos" : "/produtos"), false);
-    if(isAdminSession && savedToken) xhr.setRequestHeader("X-Token", savedToken);
+    xhr.open("GET", API_BASE_URL + "/produtos", false);
     xhr.send(null);
     if(xhr.status === 401){
-      handleSessionExpired("A sessão expirou. Volta a iniciar sessão.");
+      handleSessionExpired("A sess?o expirou. Volta a iniciar sess?o.");
       return;
     }
     if(xhr.status < 200 || xhr.status >= 300) return;
@@ -239,7 +229,7 @@ function loadCatalogFromServerSync(){
       return;
     }
     if(!res.ok || !Array.isArray(res.produtos)) return;
-    applyCatalogResponse(res, isAdminSession);
+    applyCatalogResponse(res, false);
   }catch(e){}
 }
 loadCatalogFromServerSync();
@@ -292,10 +282,10 @@ if(!Object.keys(PRODS).length){
 }
 
 function reloadCatalogFromServer(){
-  var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token") || "";
   var isAdminSession = !!(window.loggedClient && window.loggedClient.admin);
   return fetch(API_BASE_URL + (isAdminSession ? "/admin/produtos" : "/produtos"), {
-    headers: isAdminSession && savedToken ? { "X-Token": savedToken } : {}
+    credentials: "same-origin",
+    headers: isAdminSession && authToken ? { "X-Token": authToken } : {}
   })
   .then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(res){

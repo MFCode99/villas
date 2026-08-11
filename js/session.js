@@ -89,6 +89,114 @@ function handleMobileChromeScroll(){
   return;
 }
 
+function clearAuthenticatedState(){
+  loggedClient = null;
+  authToken = null;
+  ADMIN_NOTIFICATIONS = [];
+  DEV_SUMMARY = null;
+  DEV_STATUS_DATA = null;
+  DEV_NOTES = [];
+  DEV_ALL_LOGINS = [];
+  DEV_LOGIN_LOGS = [];
+  DEV_RECENT_ORDERS = [];
+}
+
+function applyAuthenticatedState(client){
+  loggedClient = client;
+  if(client && client.token) authToken = client.token;
+  var loginScreen = document.getElementById("login-screen");
+  if(loginScreen) loginScreen.style.display="none";
+  if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
+  if(typeof setDeveloperMode === "function") setDeveloperMode(!!(client && client.developer));
+  var n = client && (client.name || client.nome || "");
+  if(n){
+    var cname = document.getElementById("cname");
+    if(cname) cname.value = n;
+  }
+  if(client && client.nif){
+    var cnif = document.getElementById("cnif");
+    if(cnif) cnif.value = client.nif;
+  }
+  if(typeof updateAreaButton === "function") updateAreaButton();
+  if(typeof updateUserGreeting === "function") updateUserGreeting();
+  if(client && client.admin && !client.developer){
+    var adminSettingsBtn = document.getElementById("admin-settings-btn");
+    var newProdBtn = document.getElementById("new-prod-btn");
+    if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
+    if(newProdBtn) newProdBtn.classList.add("on");
+    if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
+    if(typeof loadAdminNotifications === "function") loadAdminNotifications();
+  } else {
+    ADMIN_NOTIFICATIONS = [];
+    if(typeof updateNotificationButton === "function") updateNotificationButton();
+  }
+  var logoutBtn = document.getElementById("logout-btn");
+  if(logoutBtn) logoutBtn.classList.add("on");
+  if(client && client.developer && typeof openDeveloperDashboard === "function"){
+    openDeveloperDashboard();
+  }
+  setTimeout(function(){
+    if(typeof updateStickyOffsets === "function") updateStickyOffsets();
+    if(typeof syncMobileCompactState === "function") syncMobileCompactState();
+  }, 0);
+  if(typeof ensureCatalogReadyOnStartup === "function"){
+    ensureCatalogReadyOnStartup();
+  }
+  if(typeof syncCartFromServer === "function"){
+    syncCartFromServer().catch(function(){ return false; });
+  }
+}
+
+function bootstrapSessionFromServer(){
+  return fetch("/me", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "X-Token": authToken || "" }
+  })
+  .then(function(r){
+    return r.text().then(function(text){
+      var res = {};
+      try{ res = text ? JSON.parse(text) : {}; }catch(e){}
+      if(!r.ok || !res.ok) return false;
+      applyAuthenticatedState({
+        user: res.user || res.nome || "",
+        name: res.nome,
+        nif: res.nif,
+        email: res.email || "",
+        telefone: res.telefone || "",
+        admin: !!res.admin,
+        developer: !!res.developer,
+        id: res.id,
+        token: res.token || ""
+      });
+      return true;
+    });
+  })
+  .catch(function(){ return false; })
+  .then(function(ok){
+    if(ok) return true;
+    clearAuthenticatedState();
+    var errBox = document.getElementById("login-err");
+    if(errBox) errBox.classList.remove("on");
+    if(typeof updateUserGreeting === "function") updateUserGreeting();
+    if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
+    if(typeof setMobileCompact === "function") setMobileCompact(false);
+    if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
+    var loginUser = document.getElementById("l-user");
+    if(loginUser) loginUser.focus();
+    return false;
+  });
+}
+
+function logoutSessionOnServer(){
+  return fetch("/logout", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "X-Token": authToken || "" }
+  }).catch(function(){ return false; });
+}
 
 function doLogin(){
   var u = document.getElementById("l-user").value.trim().toLowerCase();
@@ -156,68 +264,13 @@ function doLogin(){
 function loginSuccess(client){
   var btn = document.getElementById("login-btn");
   try{
-    loggedClient = client;
-    if(client.token) authToken = client.token;
-    var expiresAt = Date.now() + SESSION_TTL_MS;
-    sessionStorage.setItem("villas_token", authToken||"");
-    sessionStorage.setItem("villas_client", JSON.stringify(client));
-    localStorage.setItem("villas_token", authToken||"");
-    localStorage.setItem("villas_client", JSON.stringify(client));
-    localStorage.setItem("villas_session_expires", String(expiresAt));
+    applyAuthenticatedState(client);
   }catch(e){}
   try{
-    var loginScreen = document.getElementById("login-screen");
-    if(loginScreen) loginScreen.style.display="none";
-    if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
-    if(typeof setDeveloperMode === "function") setDeveloperMode(!!client.developer);
-    var n = client.name||client.nome||"";
-    if(n){
-      var cname = document.getElementById("cname");
-      if(cname) cname.value = n;
-    }
-    if(client.nif){
-      var cnif = document.getElementById("cnif");
-      if(cnif) cnif.value = client.nif;
-    }
-    if(typeof updateAreaButton === "function") updateAreaButton();
-    if(typeof updateUserGreeting === "function") updateUserGreeting();
-    if(client.admin && !client.developer){
-      var adminSettingsBtn = document.getElementById("admin-settings-btn");
-      var newProdBtn = document.getElementById("new-prod-btn");
-      if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
-      if(newProdBtn) newProdBtn.classList.add("on");
-      if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
-      if(typeof loadAdminNotifications === "function") loadAdminNotifications();
-    } else {
-      ADMIN_NOTIFICATIONS = [];
-      if(typeof updateNotificationButton === "function") updateNotificationButton();
-    }
-    var logoutBtn = document.getElementById("logout-btn");
-    if(logoutBtn) logoutBtn.classList.add("on");
-    if(client.developer && typeof openDeveloperDashboard === "function"){
-      openDeveloperDashboard();
-    }
-    setTimeout(function(){
-      if(typeof updateStickyOffsets === "function") updateStickyOffsets();
-      if(typeof syncMobileCompactState === "function") syncMobileCompactState();
-    }, 0);
-    if(typeof ensureCatalogReadyOnStartup === "function"){
-      ensureCatalogReadyOnStartup();
-    }
-    if(typeof syncCartFromServer === "function"){
-      syncCartFromServer().catch(function(){ return false; });
-    }
+    // UI updates handled in applyAuthenticatedState.
   } catch (err) {
     console.error("Login success flow failed:", err);
-    try{
-      loggedClient = null;
-      authToken = null;
-      sessionStorage.removeItem("villas_token");
-      sessionStorage.removeItem("villas_client");
-      localStorage.removeItem("villas_token");
-      localStorage.removeItem("villas_client");
-      localStorage.removeItem("villas_session_expires");
-    }catch(e){}
+    clearAuthenticatedState();
     var errBox = document.getElementById("login-err");
     if(errBox){
       errBox.textContent = "Login aceite, mas houve um erro ao abrir a área. Atualiza a página e tenta de novo.";
@@ -250,4 +303,11 @@ document.getElementById("l-pass").addEventListener("keydown", function(e){
 document.getElementById("l-user").addEventListener("keydown", function(e){
   if(e.key==="Enter") document.getElementById("l-pass").focus();
 });
+
+setTimeout(function(){
+  if(typeof bootstrapSessionFromServer === "function"){
+    bootstrapSessionFromServer().catch(function(){ return false; });
+    return;
+  }
+}, 50);
 

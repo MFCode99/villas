@@ -30,6 +30,8 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 const MIN_ORDER_TOTAL = 250;
 const sessions = new Map();
 let smtpStatus = { ready:false, message:'SMTP ainda não verificado.' };
+let siteSettings = {};
+const SESSION_COOKIE_NAME = 'villas_session';
 let runtimeConfig = loadRuntimeConfig();
 
 function loadRuntimeConfig() {
@@ -49,12 +51,7 @@ function saveRuntimeConfig() {
 }
 
 function applyRuntimeEmailConfig() {
-  const smtp = runtimeConfig.smtp && typeof runtimeConfig.smtp === 'object' ? runtimeConfig.smtp : {};
-  CONFIG.emailFrom = String(smtp.emailFrom || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com').trim();
-  CONFIG.emailTo = String(
-    smtp.emailTo || process.env.VILLAS_EMAIL_TO || CONFIG.emailFrom || 'nunomggouveia@gmail.com'
-  ).trim();
-  CONFIG.emailPass = String(smtp.emailPass || process.env.VILLAS_EMAIL_PASS || 'mlsnmovhdfwaruiq').trim();
+  applyEmailConfigFromSettings();
 }
 
 function getMaskedSecret(secret) {
@@ -73,6 +70,101 @@ function getPublicSmtpConfig() {
   };
 }
 
+function getPublicSiteSettings() {
+  return {
+    collectionMode: getCollectionModeSetting(),
+    showInactiveProducts: getShowInactiveProductsSetting()
+  };
+}
+
+function parseCookies(req) {
+  const raw = String(req.headers.cookie || '');
+  if (!raw) return {};
+  return raw.split(';').reduce(function(acc, part) {
+    const idx = part.indexOf('=');
+    if (idx < 0) return acc;
+    const key = decodeURIComponent(part.slice(0, idx).trim());
+    const value = decodeURIComponent(part.slice(idx + 1).trim());
+    if (key) acc[key] = value;
+    return acc;
+  }, {});
+}
+
+function getRequestToken(req) {
+  const cookies = parseCookies(req);
+  return String(cookies[SESSION_COOKIE_NAME] || req.headers['x-token'] || '').trim();
+}
+
+function buildSessionCookie(token, maxAgeSeconds) {
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds || 0))}`;
+}
+
+function buildClearedSessionCookie() {
+  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+function getSiteSetting(key, fallback = '') {
+  const value = siteSettings && Object.prototype.hasOwnProperty.call(siteSettings, key)
+    ? siteSettings[key]
+    : undefined;
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value);
+}
+
+function getBoolSiteSetting(key, fallback = true) {
+  const raw = getSiteSetting(key, fallback ? '1' : '0');
+  return !['0', 'false', 'off', 'no'].includes(String(raw).toLowerCase());
+}
+
+function getCollectionModeSetting() {
+  return String(getSiteSetting('collection_mode', 'personalizada')).toLowerCase();
+}
+
+function getShowInactiveProductsSetting() {
+  return getBoolSiteSetting('show_inactive_products', true);
+}
+
+function applyEmailConfigFromSettings() {
+  CONFIG.emailFrom = String(getSiteSetting('smtp_email_from', process.env.VILLAS_EMAIL_FROM || CONFIG.emailFrom || 'nunomggouveia@gmail.com')).trim();
+  CONFIG.emailTo = String(getSiteSetting('smtp_email_to', process.env.VILLAS_EMAIL_TO || CONFIG.emailTo || CONFIG.emailFrom)).trim();
+  CONFIG.emailPass = String(getSiteSetting('smtp_email_pass', process.env.VILLAS_EMAIL_PASS || CONFIG.emailPass || 'mlsnmovhdfwaruiq')).trim();
+}
+
+async function loadSiteSettingsFromDB() {
+  const [rows] = await db.execute('SELECT setting_key, setting_value FROM site_settings');
+  siteSettings = {};
+  rows.forEach(function(row){
+    siteSettings[row.setting_key] = row.setting_value;
+  });
+  return siteSettings;
+}
+
+async function seedSiteSettingsDefaults() {
+  const defaults = [
+    ['collection_mode', String(runtimeConfig.collectionMode || 'personalizada').toLowerCase()],
+    ['show_inactive_products', runtimeConfig.showInactiveProducts === false ? '0' : '1'],
+    ['smtp_email_from', String((runtimeConfig.smtp && runtimeConfig.smtp.emailFrom) || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com')],
+    ['smtp_email_to', String((runtimeConfig.smtp && runtimeConfig.smtp.emailTo) || process.env.VILLAS_EMAIL_TO || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com')],
+    ['smtp_email_pass', String((runtimeConfig.smtp && runtimeConfig.smtp.emailPass) || process.env.VILLAS_EMAIL_PASS || 'mlsnmovhdfwaruiq')]
+  ];
+  for (const [key, value] of defaults) {
+    await db.execute(
+      `INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES (?, ?)`,
+      [key, value]
+    );
+  }
+}
+
+async function setSiteSetting(key, value) {
+  await db.execute(
+    `INSERT INTO site_settings (setting_key, setting_value)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP`,
+    [String(key), String(value == null ? '' : value)]
+  );
+  siteSettings[String(key)] = String(value == null ? '' : value);
+}
+
 applyRuntimeEmailConfig();
 
 // â”€â”€ BASE DE DADOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -80,6 +172,8 @@ let db;
 async function connectDB() {
   db = await mysql.createPool({ ...CONFIG.db, waitForConnections: true, connectionLimit: 10 });
   await ensureSchemaFixes();
+  await loadSessionsFromDB().catch(function(){});
+  applyEmailConfigFromSettings();
   console.log('Ligado a MySQL');
 }
 
@@ -125,6 +219,25 @@ async function ensureSchemaFixes() {
         updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         expires_at   DATETIME NOT NULL,
         FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        token        CHAR(64) PRIMARY KEY,
+        cliente_id   INT NOT NULL,
+        admin        TINYINT(1) DEFAULT 0,
+        developer    TINYINT(1) DEFAULT 0,
+        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        expires_at   DATETIME NOT NULL,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS site_settings (
+        setting_key   VARCHAR(80) PRIMARY KEY,
+        setting_value LONGTEXT NOT NULL,
+        updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     await db.execute(`
@@ -254,7 +367,11 @@ async function ensureSchemaFixes() {
        VALUES (?,?,?,?,?,?,0,1,1)`,
       ['vlsdev4729', 'Nv7k!Q2mL9', 'Programador Villas', '', '', '']
     );
+    await seedSiteSettingsDefaults();
+    await loadSiteSettingsFromDB();
+    applyEmailConfigFromSettings();
     await db.execute('DELETE FROM cart_states WHERE expires_at < NOW()');
+    await db.execute('DELETE FROM sessions WHERE expires_at < NOW()');
   } catch (e) {
     console.log('Aviso ao validar schema:', e.message);
   }
@@ -303,11 +420,11 @@ async function updateEmailConfig(data = {}) {
   const nextPass = data.emailPass == null ? '' : String(data.emailPass).trim();
   if (!nextFrom) throw new Error('O email de envio é obrigatório.');
   if (!nextTo) throw new Error('O email de destino é obrigatório.');
-  if (!runtimeConfig.smtp || typeof runtimeConfig.smtp !== 'object') runtimeConfig.smtp = {};
-  runtimeConfig.smtp.emailFrom = nextFrom;
-  runtimeConfig.smtp.emailTo = nextTo;
-  if (nextPass) runtimeConfig.smtp.emailPass = nextPass;
-  saveRuntimeConfig();
+  await setSiteSetting('smtp_email_from', nextFrom);
+  await setSiteSetting('smtp_email_to', nextTo);
+  if (nextPass) await setSiteSetting('smtp_email_pass', nextPass);
+  await loadSiteSettingsFromDB();
+  applyEmailConfigFromSettings();
   await refreshEmailTransport();
   return {
     config: getPublicSmtpConfig(),
@@ -793,19 +910,49 @@ function sendJSON(res, code, data) {
   res.end(JSON.stringify(data));
 }
 
-function createSession(client) {
+async function loadSessionsFromDB() {
+  const [rows] = await db.execute(
+    `SELECT token, cliente_id, admin, developer, expires_at
+     FROM sessions
+     WHERE expires_at >= NOW()`
+  );
+  sessions.clear();
+  rows.forEach(function(row){
+    sessions.set(row.token, {
+      id: Number(row.cliente_id),
+      admin: !!row.admin,
+      developer: !!row.developer,
+      expiresAt: new Date(row.expires_at).getTime()
+    });
+  });
+}
+
+async function createSession(client) {
   const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, {
+  const expiresAt = Date.now() + SESSION_TTL_MS;
+  const session = {
     id: client.id,
     admin: !!client.admin,
     developer: !!client.developer,
-    expiresAt: Date.now() + SESSION_TTL_MS
-  });
+    expiresAt
+  };
+  sessions.set(token, session);
+  await db.execute(
+    `INSERT INTO sessions (token, cliente_id, admin, developer, expires_at)
+     VALUES (?, ?, ?, ?, FROM_UNIXTIME(? / 1000))
+     ON DUPLICATE KEY UPDATE
+       cliente_id=VALUES(cliente_id),
+       admin=VALUES(admin),
+       developer=VALUES(developer),
+       expires_at=VALUES(expires_at),
+       updated_at=CURRENT_TIMESTAMP`,
+    [token, client.id, session.admin ? 1 : 0, session.developer ? 1 : 0, expiresAt]
+  );
   return token;
 }
 
 function getSessionFromReq(req) {
-  const token = req.headers['x-token'];
+  const token = getRequestToken(req);
   if (!token || !sessions.has(token)) return null;
   const session = sessions.get(token);
   if (!session || session.expiresAt < Date.now()) {
@@ -813,6 +960,10 @@ function getSessionFromReq(req) {
     return null;
   }
   session.expiresAt = Date.now() + SESSION_TTL_MS;
+  db.execute(
+    `UPDATE sessions SET expires_at=FROM_UNIXTIME(? / 1000), updated_at=CURRENT_TIMESTAMP WHERE token=?`,
+    [session.expiresAt, token]
+  ).catch(function(){});
   return { token, ...session };
 }
 
@@ -1198,22 +1349,19 @@ async function applySeasonMode(mode) {
     await db.execute(
       "UPDATE produtos SET activo = CASE WHEN COALESCE(estacao,'ambos')='inverno' THEN 0 ELSE 1 END"
     );
-    runtimeConfig.collectionMode = 'verao';
-    saveRuntimeConfig();
+    await setSiteSetting('collection_mode', 'verao');
     return 'verao';
   }
   if (normalized === 'inverno') {
     await db.execute(
       "UPDATE produtos SET activo = CASE WHEN COALESCE(estacao,'ambos')='verao' THEN 0 ELSE 1 END"
     );
-    runtimeConfig.collectionMode = 'inverno';
-    saveRuntimeConfig();
+    await setSiteSetting('collection_mode', 'inverno');
     return 'inverno';
   }
   if (normalized === 'todos') {
     await db.execute("UPDATE produtos SET activo = 1");
-    runtimeConfig.collectionMode = 'todos';
-    saveRuntimeConfig();
+    await setSiteSetting('collection_mode', 'todos');
     return 'todos';
   }
   throw new Error('Modo de colecao invalido');
@@ -1305,8 +1453,46 @@ async function handleRequest(req, res) {
       ok:true,
       categorias,
       produtos,
-      collectionMode: String(runtimeConfig.collectionMode || 'personalizada').toLowerCase()
+      collectionMode: getCollectionModeSetting()
     });
+  }
+
+  if (req.method === 'GET' && url === '/site-settings') {
+    return sendJSON(res, 200, {
+      ok:true,
+      ...getPublicSiteSettings(),
+      smtpReady: !!smtpStatus.ready,
+      smtpMessage: smtpStatus.message || ''
+    });
+  }
+
+  if (req.method === 'GET' && url === '/me') {
+    const session = requireSession(req, false);
+    const client = await getClientById(session.id);
+    if (!client) {
+      return sendJSON(res, 404, { ok:false, message:'Cliente não encontrado' });
+    }
+    return sendJSON(res, 200, {
+      ok:true,
+      id: client.id,
+      nome: client.nome,
+      nif: client.nif || '',
+      email: client.email || '',
+      telefone: client.telefone || '',
+      admin: !!client.admin,
+      developer: !!client.developer,
+      token: session.token
+    });
+  }
+
+  if (req.method === 'POST' && url === '/logout') {
+    const session = getSessionFromReq(req);
+    if (session) {
+      sessions.delete(session.token);
+      await db.execute('DELETE FROM sessions WHERE token=?', [session.token]).catch(function(){});
+    }
+    res.setHeader('Set-Cookie', buildClearedSessionCookie());
+    return sendJSON(res, 200, { ok:true });
   }
 
   // Login
@@ -1321,7 +1507,8 @@ async function handleRequest(req, res) {
     }
     await db.execute('UPDATE clientes SET ultimo_login=NOW() WHERE id=?', [rows[0].id]);
     await logLoginAttempt(req, { user: data.user, clienteId: rows[0].id, nome: rows[0].nome, success: true });
-    const token = createSession(rows[0]);
+    const token = await createSession(rows[0]);
+    res.setHeader('Set-Cookie', buildSessionCookie(token, SESSION_TTL_MS / 1000));
     return sendJSON(res, 200, {
       ok:true,
       id:rows[0].id,
@@ -1447,7 +1634,7 @@ async function handleRequest(req, res) {
       ok:true,
       categorias,
       produtos,
-      collectionMode: String(runtimeConfig.collectionMode || 'personalizada').toLowerCase()
+      collectionMode: getCollectionModeSetting()
     });
   }
 
@@ -1487,8 +1674,28 @@ async function handleRequest(req, res) {
     requireSession(req, true);
     return sendJSON(res, 200, {
       ok:true,
-      modo: String(runtimeConfig.collectionMode || 'personalizada').toLowerCase()
+      modo: getCollectionModeSetting()
     });
+  }
+
+  if (req.method==='GET' && url==='/admin/site-settings') {
+    requireSession(req, true);
+    return sendJSON(res, 200, {
+      ok:true,
+      ...getPublicSiteSettings()
+    });
+  }
+
+  if (req.method==='PUT' && url==='/admin/site-settings') {
+    requireSession(req, true);
+    if (data.showInactiveProducts != null) {
+      await setSiteSetting('show_inactive_products', data.showInactiveProducts ? '1' : '0');
+    }
+    if (data.collectionMode != null) {
+      const mode = await applySeasonMode(data.collectionMode);
+      return sendJSON(res, 200, { ok:true, mode, ...getPublicSiteSettings() });
+    }
+    return sendJSON(res, 200, { ok:true, ...getPublicSiteSettings() });
   }
 
   const prodM = url.match(/^\/admin\/produtos\/([^/]+)$/);
