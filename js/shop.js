@@ -300,6 +300,7 @@ function pushCartStateToServer(){
 }
 function syncCartFromServer(){
   if(!loggedClient || !authToken) return Promise.resolve(false);
+  var localSnapshot = normalizeCartItems(cart);
   return window.fetch(CART_SERVER_URL, {
     method: "GET",
     cache: "no-store",
@@ -314,24 +315,17 @@ function syncCartFromServer(){
       try{ data = text ? JSON.parse(text) : {}; }catch(e){}
       if(!r.ok || !data.ok) return false;
       if(Array.isArray(data.cart)){
-        var merged = normalizeCartItems(cart).slice();
-        var seen = {};
-        merged.forEach(function(item){
-          seen[item.key] = item;
-        });
-        normalizeCartItems(data.cart).forEach(function(item){
-          if(seen[item.key]){
-            seen[item.key].qty += item.qty;
-            return;
-          }
-          merged.push(item);
-          seen[item.key] = item;
-        });
-        cart = merged;
+        var serverCart = normalizeCartItems(data.cart);
+        if(serverCart.length){
+          cart = serverCart;
+        } else if(localSnapshot.length){
+          return pushCartStateToServer().then(function(){ return true; });
+        } else {
+          cart = [];
+        }
         saveCartStateLocal();
         renderCart();
         refreshCartBadges();
-        pushCartStateToServer();
         return true;
       }
       return false;
