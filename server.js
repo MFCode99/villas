@@ -172,6 +172,8 @@ let db;
 async function connectDB() {
   db = await mysql.createPool({ ...CONFIG.db, waitForConnections: true, connectionLimit: 10 });
   await ensureSchemaFixes();
+  await db.execute('DELETE FROM sessions').catch(function(){});
+  sessions.clear();
   await loadSessionsFromDB().catch(function(){});
   applyEmailConfigFromSettings();
   console.log('Ligado a MySQL');
