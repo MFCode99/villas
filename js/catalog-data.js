@@ -214,7 +214,8 @@ function applyCategoryList(categories, preserveExistingItems){
 }
 
 function shouldSkipInitialCatalogBootstrap(){
-  return String(window.VILLAS_INITIAL_VIEW || "").toLowerCase() === "login" && !window.loggedClient;
+  var view = String(window.VILLAS_INITIAL_VIEW || "").toLowerCase();
+  return (view === "login" || view === "admin" || view === "developer") && !window.loggedClient;
 }
 
 function loadCatalogFromServerSync(){
