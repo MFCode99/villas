@@ -279,8 +279,9 @@ function loginSuccess(client){
   }catch(e){}
   try{
     // UI updates handled in applyAuthenticatedState.
-    if(window.location && window.location.pathname !== "/catalogo"){
-      window.location.replace("/catalogo");
+    var nextPath = (client && (client.admin || client.developer)) ? "/admin" : "/catalogo";
+    if(window.location && window.location.pathname !== nextPath){
+      window.location.replace(nextPath);
       return;
     }
   } catch (err) {
