@@ -138,8 +138,13 @@ function applyAuthenticatedState(client){
   }
   var logoutBtn = document.getElementById("logout-btn");
   if(logoutBtn) logoutBtn.classList.add("on");
+  var initialView = String(window.VILLAS_INITIAL_VIEW || "").toLowerCase();
   if(client && client.developer && typeof openDeveloperDashboard === "function"){
     openDeveloperDashboard();
+  } else if(client && (client.admin || client.developer) && initialView === "admin" && typeof openAdmin === "function"){
+    setTimeout(function(){
+      openAdmin();
+    }, 0);
   }
   setTimeout(function(){
     if(typeof updateStickyOffsets === "function") updateStickyOffsets();
