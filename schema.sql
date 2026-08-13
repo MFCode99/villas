@@ -29,7 +29,15 @@ CREATE TABLE IF NOT EXISTS encomendas (
   unidades     INT           NOT NULL,
   linhas       INT           NOT NULL,
   notas        TEXT          DEFAULT NULL,
+  request_id   VARCHAR(80)   DEFAULT NULL,
+  public_number VARCHAR(40)  DEFAULT NULL,
+  order_status VARCHAR(30)   DEFAULT 'created',
+  email_status VARCHAR(30)    DEFAULT 'pending',
+  email_error  TEXT           DEFAULT NULL,
+  email_sent_at DATETIME      DEFAULT NULL,
   criado_em    DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_encomendas_public_number (public_number),
+  UNIQUE KEY uq_encomendas_request_id (request_id),
   FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 );
 
@@ -105,11 +113,18 @@ CREATE TABLE IF NOT EXISTS dev_notes (
 );
 
 CREATE TABLE IF NOT EXISTS cart_states (
-  cliente_id   INT PRIMARY KEY,
-  payload      LONGTEXT NOT NULL,
-  updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  expires_at   DATETIME NOT NULL,
-  FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+  client_id      INT PRIMARY KEY,
+  revision       BIGINT NOT NULL DEFAULT 0,
+  items_json     LONGTEXT NOT NULL,
+  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_by     VARCHAR(80) DEFAULT 'client'
+);
+
+CREATE TABLE IF NOT EXISTS order_request_ids (
+  request_id     VARCHAR(80) PRIMARY KEY,
+  encomenda_id   INT NOT NULL,
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_order_request_encomenda (encomenda_id)
 );
 
 SET @db_name = DATABASE();
@@ -155,6 +170,10 @@ ON DUPLICATE KEY UPDATE
   telefone = VALUES(telefone),
   developer = VALUES(developer),
   activo = VALUES(activo);
+
+UPDATE encomendas
+SET public_number = CONCAT('VLS-', YEAR(COALESCE(criado_em, NOW())), '-', LPAD(id, 6, '0'))
+WHERE public_number IS NULL OR public_number = '';
 
 
 

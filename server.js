@@ -7,6 +7,16 @@ const fs         = require('fs');
 const path       = require('path');
 const nodemailer = require('nodemailer');
 const mysql      = require('mysql2/promise');
+const {
+  parseArrayField: coreParseArrayField,
+  normalizeQtyStep: coreNormalizeQtyStep,
+  normalizeSeason: coreNormalizeSeason,
+  normalizeChoiceText: coreNormalizeChoiceText,
+  buildPublicOrderNumber,
+  getOrderSummary,
+  cartItemKey,
+  createRequestId
+} = require('./lib/villas-core');
 
 // â”€â”€ CONFIGURAÃ‡ÃƒO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const RUNTIME_CONFIG_FILE = path.join(__dirname, '.runtime-config.json');
@@ -22,16 +32,14 @@ const CONFIG = {
     user:     process.env.VILLAS_DB_USER || 'villas_user',
     password: process.env.VILLAS_DB_PASS || 'Villas@2026!',
     database: process.env.VILLAS_DB_NAME || 'villas',
-    port:     parseInt(process.env.VILLAS_DB_PORT || '3306', 10),
     charset:  'utf8mb4',
   }
 };
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const MIN_ORDER_TOTAL = 250;
 const sessions = new Map();
+const cartWriteLocks = new Map();
 let smtpStatus = { ready:false, message:'SMTP ainda não verificado.' };
-let siteSettings = {};
-const SESSION_COOKIE_NAME = 'villas_session';
 let runtimeConfig = loadRuntimeConfig();
 
 function loadRuntimeConfig() {
@@ -51,7 +59,12 @@ function saveRuntimeConfig() {
 }
 
 function applyRuntimeEmailConfig() {
-  applyEmailConfigFromSettings();
+  const smtp = runtimeConfig.smtp && typeof runtimeConfig.smtp === 'object' ? runtimeConfig.smtp : {};
+  CONFIG.emailFrom = String(smtp.emailFrom || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com').trim();
+  CONFIG.emailTo = String(
+    smtp.emailTo || process.env.VILLAS_EMAIL_TO || CONFIG.emailFrom || 'nunomggouveia@gmail.com'
+  ).trim();
+  CONFIG.emailPass = String(smtp.emailPass || process.env.VILLAS_EMAIL_PASS || 'mlsnmovhdfwaruiq').trim();
 }
 
 function getMaskedSecret(secret) {
@@ -70,101 +83,6 @@ function getPublicSmtpConfig() {
   };
 }
 
-function getPublicSiteSettings() {
-  return {
-    collectionMode: getCollectionModeSetting(),
-    showInactiveProducts: getShowInactiveProductsSetting()
-  };
-}
-
-function parseCookies(req) {
-  const raw = String(req.headers.cookie || '');
-  if (!raw) return {};
-  return raw.split(';').reduce(function(acc, part) {
-    const idx = part.indexOf('=');
-    if (idx < 0) return acc;
-    const key = decodeURIComponent(part.slice(0, idx).trim());
-    const value = decodeURIComponent(part.slice(idx + 1).trim());
-    if (key) acc[key] = value;
-    return acc;
-  }, {});
-}
-
-function getRequestToken(req) {
-  const cookies = parseCookies(req);
-  return String(cookies[SESSION_COOKIE_NAME] || req.headers['x-token'] || '').trim();
-}
-
-function buildSessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds || 0))}`;
-}
-
-function buildClearedSessionCookie() {
-  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
-}
-
-function getSiteSetting(key, fallback = '') {
-  const value = siteSettings && Object.prototype.hasOwnProperty.call(siteSettings, key)
-    ? siteSettings[key]
-    : undefined;
-  if (value === undefined || value === null || value === '') return fallback;
-  return String(value);
-}
-
-function getBoolSiteSetting(key, fallback = true) {
-  const raw = getSiteSetting(key, fallback ? '1' : '0');
-  return !['0', 'false', 'off', 'no'].includes(String(raw).toLowerCase());
-}
-
-function getCollectionModeSetting() {
-  return String(getSiteSetting('collection_mode', 'personalizada')).toLowerCase();
-}
-
-function getShowInactiveProductsSetting() {
-  return getBoolSiteSetting('show_inactive_products', true);
-}
-
-function applyEmailConfigFromSettings() {
-  CONFIG.emailFrom = String(getSiteSetting('smtp_email_from', process.env.VILLAS_EMAIL_FROM || CONFIG.emailFrom || 'nunomggouveia@gmail.com')).trim();
-  CONFIG.emailTo = String(getSiteSetting('smtp_email_to', process.env.VILLAS_EMAIL_TO || CONFIG.emailTo || CONFIG.emailFrom)).trim();
-  CONFIG.emailPass = String(getSiteSetting('smtp_email_pass', process.env.VILLAS_EMAIL_PASS || CONFIG.emailPass || 'mlsnmovhdfwaruiq')).trim();
-}
-
-async function loadSiteSettingsFromDB() {
-  const [rows] = await db.execute('SELECT setting_key, setting_value FROM site_settings');
-  siteSettings = {};
-  rows.forEach(function(row){
-    siteSettings[row.setting_key] = row.setting_value;
-  });
-  return siteSettings;
-}
-
-async function seedSiteSettingsDefaults() {
-  const defaults = [
-    ['collection_mode', String(runtimeConfig.collectionMode || 'personalizada').toLowerCase()],
-    ['show_inactive_products', runtimeConfig.showInactiveProducts === false ? '0' : '1'],
-    ['smtp_email_from', String((runtimeConfig.smtp && runtimeConfig.smtp.emailFrom) || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com')],
-    ['smtp_email_to', String((runtimeConfig.smtp && runtimeConfig.smtp.emailTo) || process.env.VILLAS_EMAIL_TO || process.env.VILLAS_EMAIL_FROM || 'nunomggouveia@gmail.com')],
-    ['smtp_email_pass', String((runtimeConfig.smtp && runtimeConfig.smtp.emailPass) || process.env.VILLAS_EMAIL_PASS || 'mlsnmovhdfwaruiq')]
-  ];
-  for (const [key, value] of defaults) {
-    await db.execute(
-      `INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES (?, ?)`,
-      [key, value]
-    );
-  }
-}
-
-async function setSiteSetting(key, value) {
-  await db.execute(
-    `INSERT INTO site_settings (setting_key, setting_value)
-     VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP`,
-    [String(key), String(value == null ? '' : value)]
-  );
-  siteSettings[String(key)] = String(value == null ? '' : value);
-}
-
 applyRuntimeEmailConfig();
 
 // â”€â”€ BASE DE DADOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -172,10 +90,6 @@ let db;
 async function connectDB() {
   db = await mysql.createPool({ ...CONFIG.db, waitForConnections: true, connectionLimit: 10 });
   await ensureSchemaFixes();
-  await db.execute('DELETE FROM sessions').catch(function(){});
-  sessions.clear();
-  await loadSessionsFromDB().catch(function(){});
-  applyEmailConfigFromSettings();
   console.log('Ligado a MySQL');
 }
 
@@ -215,34 +129,6 @@ async function ensureSchemaFixes() {
       )
     `);
     await db.execute(`
-      CREATE TABLE IF NOT EXISTS cart_states (
-        cliente_id   INT PRIMARY KEY,
-        payload      LONGTEXT NOT NULL,
-        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        expires_at   DATETIME NOT NULL,
-        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
-      )
-    `);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        token        CHAR(64) PRIMARY KEY,
-        cliente_id   INT NOT NULL,
-        admin        TINYINT(1) DEFAULT 0,
-        developer    TINYINT(1) DEFAULT 0,
-        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        expires_at   DATETIME NOT NULL,
-        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
-      )
-    `);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS site_settings (
-        setting_key   VARCHAR(80) PRIMARY KEY,
-        setting_value LONGTEXT NOT NULL,
-        updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-    await db.execute(`
       CREATE TABLE IF NOT EXISTS categorias (
         id            VARCHAR(80) PRIMARY KEY,
         label         VARCHAR(120) NOT NULL,
@@ -271,6 +157,67 @@ async function ensureSchemaFixes() {
         atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS cart_states (
+        client_id      INT PRIMARY KEY,
+        revision       BIGINT NOT NULL DEFAULT 0,
+        items_json     LONGTEXT NOT NULL,
+        updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_by     VARCHAR(80) DEFAULT 'client'
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS order_request_ids (
+        request_id     VARCHAR(80) PRIMARY KEY,
+        encomenda_id   INT NOT NULL,
+        created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_order_request_encomenda (encomenda_id)
+      )
+    `);
+    const [orderCols] = await db.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'encomendas'
+         AND COLUMN_NAME IN ('request_id','public_number','order_status','email_status','email_error','email_sent_at')`,
+      [CONFIG.db.database]
+    );
+    const present = new Set(orderCols.map((row) => row.COLUMN_NAME));
+    if (!present.has('request_id')) await db.execute(`ALTER TABLE encomendas ADD COLUMN request_id VARCHAR(80) DEFAULT NULL`);
+    if (!present.has('public_number')) await db.execute(`ALTER TABLE encomendas ADD COLUMN public_number VARCHAR(40) DEFAULT NULL`);
+    if (!present.has('order_status')) await db.execute(`ALTER TABLE encomendas ADD COLUMN order_status VARCHAR(30) DEFAULT 'created'`);
+    if (!present.has('email_status')) await db.execute(`ALTER TABLE encomendas ADD COLUMN email_status VARCHAR(30) DEFAULT 'pending'`);
+    if (!present.has('email_error')) await db.execute(`ALTER TABLE encomendas ADD COLUMN email_error TEXT DEFAULT NULL`);
+    if (!present.has('email_sent_at')) await db.execute(`ALTER TABLE encomendas ADD COLUMN email_sent_at DATETIME DEFAULT NULL`);
+    await db.execute(`UPDATE encomendas SET order_status = COALESCE(order_status, 'created')`);
+    await db.execute(`UPDATE encomendas SET email_status = COALESCE(email_status, 'pending')`);
+    await db.execute(
+      `UPDATE encomendas
+       SET public_number = CONCAT('VLS-', YEAR(COALESCE(criado_em, NOW())), '-', LPAD(id, 6, '0'))
+       WHERE public_number IS NULL OR public_number = ''`
+    );
+    const [publicIdxRows] = await db.execute(
+      `SELECT INDEX_NAME
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'encomendas'
+         AND INDEX_NAME = 'uq_encomendas_public_number'`,
+      [CONFIG.db.database]
+    );
+    if (!publicIdxRows.length) {
+      await db.execute(`CREATE UNIQUE INDEX uq_encomendas_public_number ON encomendas (public_number)`);
+    }
+    const [requestIdxRows] = await db.execute(
+      `SELECT INDEX_NAME
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'encomendas'
+         AND INDEX_NAME = 'uq_encomendas_request_id'`,
+      [CONFIG.db.database]
+    );
+    if (!requestIdxRows.length) {
+      await db.execute(`CREATE UNIQUE INDEX uq_encomendas_request_id ON encomendas (request_id)`);
+    }
     const [qtyStepRows] = await db.execute(
       `SELECT COLUMN_NAME
        FROM information_schema.COLUMNS
@@ -313,17 +260,23 @@ async function ensureSchemaFixes() {
     if (!devColRows.length) {
       await db.execute(`ALTER TABLE clientes ADD COLUMN developer TINYINT(1) DEFAULT 0`);
     }
-    const [loginColRows] = await db.execute(
+    const [cartCols] = await db.execute(
       `SELECT COLUMN_NAME
        FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = ?
-         AND TABLE_NAME = 'clientes'
-         AND COLUMN_NAME = 'ultimo_login'`,
+         AND TABLE_NAME = 'cart_states'
+         AND COLUMN_NAME IN ('revision','items_json')`,
       [CONFIG.db.database]
     );
-    if (!loginColRows.length) {
-      await db.execute(`ALTER TABLE clientes ADD COLUMN ultimo_login DATETIME DEFAULT NULL`);
+    const cartPresent = new Set(cartCols.map((row) => row.COLUMN_NAME));
+    if (!cartPresent.has('revision')) {
+      await db.execute(`ALTER TABLE cart_states ADD COLUMN revision BIGINT NOT NULL DEFAULT 0`);
     }
+    if (!cartPresent.has('items_json')) {
+      await db.execute(`ALTER TABLE cart_states ADD COLUMN items_json LONGTEXT NOT NULL`);
+    }
+    await db.execute(`UPDATE cart_states SET items_json = COALESCE(items_json, '[]') WHERE items_json IS NULL OR items_json = ''`);
+    await db.execute(`UPDATE cart_states SET revision = COALESCE(revision, 0) WHERE revision IS NULL`);
 
     const defaultCategories = [
       ['Soquetes', 'Soquetes', 0],
@@ -369,11 +322,6 @@ async function ensureSchemaFixes() {
        VALUES (?,?,?,?,?,?,0,1,1)`,
       ['vlsdev4729', 'Nv7k!Q2mL9', 'Programador Villas', '', '', '']
     );
-    await seedSiteSettingsDefaults();
-    await loadSiteSettingsFromDB();
-    applyEmailConfigFromSettings();
-    await db.execute('DELETE FROM cart_states WHERE expires_at < NOW()');
-    await db.execute('DELETE FROM sessions WHERE expires_at < NOW()');
   } catch (e) {
     console.log('Aviso ao validar schema:', e.message);
   }
@@ -422,11 +370,11 @@ async function updateEmailConfig(data = {}) {
   const nextPass = data.emailPass == null ? '' : String(data.emailPass).trim();
   if (!nextFrom) throw new Error('O email de envio é obrigatório.');
   if (!nextTo) throw new Error('O email de destino é obrigatório.');
-  await setSiteSetting('smtp_email_from', nextFrom);
-  await setSiteSetting('smtp_email_to', nextTo);
-  if (nextPass) await setSiteSetting('smtp_email_pass', nextPass);
-  await loadSiteSettingsFromDB();
-  applyEmailConfigFromSettings();
+  if (!runtimeConfig.smtp || typeof runtimeConfig.smtp !== 'object') runtimeConfig.smtp = {};
+  runtimeConfig.smtp.emailFrom = nextFrom;
+  runtimeConfig.smtp.emailTo = nextTo;
+  if (nextPass) runtimeConfig.smtp.emailPass = nextPass;
+  saveRuntimeConfig();
   await refreshEmailTransport();
   return {
     config: getPublicSmtpConfig(),
@@ -437,6 +385,7 @@ async function updateEmailConfig(data = {}) {
 function buildOrderHTML(order, opts = {}) {
   const hidePrices = !!opts.hidePrices;
   const { client, nif, date, time, notes, total, units, lines, items } = order;
+  const publicNumber = order.publicNumber || order.public_number || buildPublicOrderNumber(order.id, order.criado_em);
   const rows = items.map((c, i) => {
     const bg = i % 2 === 0 ? '#ffffff' : '#f9f7f4';
     const td = 'padding:7px 10px;border-bottom:1px solid #e2ddd5;font-size:12px;';
@@ -489,6 +438,7 @@ function buildOrderHTML(order, opts = {}) {
     + "<h1 style='font-family:Georgia,serif;font-size:28px;border-bottom:2px solid #c9a84c;padding-bottom:8px;margin-bottom:4px'>Villas&reg;</h1>"
     + "<p style='font-size:10px;color:#888;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px'>Outono/Inverno 2025&middot;2026 &mdash; Nota de Encomenda</p>"
     + "<div style='display:flex;flex-wrap:wrap;gap:28px;background:#f7f4ef;padding:12px 16px;border-radius:4px;margin-bottom:18px'>"
+    + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Número</strong>" + publicNumber + "</div>"
     + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Cliente</strong>" + (client || "&mdash;") + "</div>"
     + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>NIF</strong>" + (nif || "&mdash;") + "</div>"
     + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Data</strong>" + date + " " + time + "</div>"
@@ -546,8 +496,8 @@ async function generatePDF(html) {
 
 async function buildOrderPdfAttachments(order) {
   const name = (order.client || 'cliente').replace(/\s+/g, '_');
-  const date = String(order.date || '').replace(/\//g, '-');
-  const baseName = `encomenda_${name}_${date || 'villas'}`;
+  const publicNumber = order.publicNumber || order.public_number || buildPublicOrderNumber(order.id, order.criado_em);
+  const baseName = `${publicNumber}_${name}`.replace(/[^\w.-]+/g, '_');
   const variants = [
     {
       filename: `${baseName}.pdf`,
@@ -578,7 +528,7 @@ async function sendEmail(order) {
     await transporter.sendMail({
       from: `"Catálogo Villas" <${CONFIG.emailFrom}>`,
       to:   CONFIG.emailTo,
-      subject: `Encomenda Villas - ${order.client||'Cliente'} - ${order.date}`,
+      subject: `Encomenda ${order.publicNumber || order.public_number || buildPublicOrderNumber(order.id, order.criado_em)} - ${order.client||'Cliente'}`,
       html,
       attachments
     });
@@ -720,25 +670,97 @@ async function saveOrder(clientId, order) {
     throw err;
   }
 
-  const total = Number(order.total || 0);
-  if (!Number.isFinite(total) || total < MIN_ORDER_TOTAL) {
+  const requestId = String(order.request_id || '').trim();
+  if (!requestId) {
+    const err = new Error('request_id é obrigatório.');
+    err.code = 'MISSING_REQUEST_ID';
+    throw err;
+  }
+  const hydrated = await validateAndHydrateCartItems(order.items || [], { strict: true });
+  const summary = getOrderSummary(hydrated.items);
+  if (!summary.total || summary.total < MIN_ORDER_TOTAL) {
     const err = new Error(`Encomenda mínima de ${MIN_ORDER_TOTAL.toFixed(2)} EUR.`);
     err.code = 'MIN_ORDER_TOTAL';
     throw err;
   }
 
-  const [r] = await db.execute(
-    'INSERT INTO encomendas (cliente_id,cliente_nome,cliente_nif,total,unidades,linhas,notas) VALUES (?,?,?,?,?,?,?)',
-    [cid, order.client, order.nif||'', total, order.units, order.lines, order.notes||null]
-  );
-  const eid = r.insertId;
-  for (const i of order.items) {
-    await db.execute(
-      'INSERT INTO encomenda_linhas (encomenda_id,ref,nome,tipo,cor,tamanho,quantidade,preco_unit,total_linha) VALUES (?,?,?,?,?,?,?,?,?)',
-      [eid, i.ref, i.name, i.type||'', i.cor, i.tam, i.qty, i.price, i.price*i.qty]
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [existingRows] = await conn.execute(
+      `SELECT id,cliente_id,cliente_nome,cliente_nif,total,unidades,linhas,notas,request_id,public_number,order_status,email_status,email_error,email_sent_at,criado_em
+       FROM encomendas
+       WHERE request_id=? LIMIT 1
+       FOR UPDATE`,
+      [requestId]
     );
+    if (existingRows.length) {
+      const existing = existingRows[0];
+      await conn.commit();
+      return {
+        id: Number(existing.id),
+        publicNumber: existing.public_number || buildPublicOrderNumber(existing.id, existing.criado_em),
+        requestId,
+        existing: true
+      };
+    }
+    const [result] = await conn.execute(
+      `INSERT INTO encomendas
+       (cliente_id,cliente_nome,cliente_nif,total,unidades,linhas,notas,request_id,public_number,order_status,email_status,email_error,email_sent_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        cid,
+        order.client,
+        order.nif || '',
+        summary.total,
+        summary.units,
+        summary.lines,
+        order.notes || null,
+        requestId,
+        null,
+        'created',
+        'pending',
+        null,
+        null
+      ]
+    );
+    const eid = result.insertId;
+    for (const item of hydrated.items) {
+      await conn.execute(
+        'INSERT INTO encomenda_linhas (encomenda_id,ref,nome,tipo,cor,tamanho,quantidade,preco_unit,total_linha) VALUES (?,?,?,?,?,?,?,?,?)',
+        [eid, item.ref, item.name, item.type || '', item.cor, item.tam, item.qty, item.price, item.price * item.qty]
+      );
+    }
+    const publicNumber = buildPublicOrderNumber(eid, new Date());
+    await conn.execute(
+      'UPDATE encomendas SET public_number=? WHERE id=?',
+      [publicNumber, eid]
+    );
+    await conn.commit();
+    return { id: eid, publicNumber, requestId, existing: false };
+  } catch (e) {
+    try { await conn.rollback(); } catch (rollbackErr) {}
+    if (e && e.code === 'ER_DUP_ENTRY') {
+      const [dupRows] = await db.execute(
+        `SELECT id,cliente_id,cliente_nome,cliente_nif,total,unidades,linhas,notas,request_id,public_number,order_status,email_status,email_error,email_sent_at,criado_em
+         FROM encomendas
+         WHERE request_id=? LIMIT 1`,
+        [requestId]
+      );
+      if (dupRows.length) {
+        const existing = dupRows[0];
+        return {
+          id: Number(existing.id),
+          publicNumber: existing.public_number || buildPublicOrderNumber(existing.id, existing.criado_em),
+          requestId,
+          existing: true
+        };
+      }
+    }
+    throw e;
+  } finally {
+    conn.release();
   }
-  return eid;
 }
 
 async function getClientById(clientId) {
@@ -751,7 +773,7 @@ async function getClientById(clientId) {
 
 async function listClientOrders(clientId) {
   const [rows] = await db.execute(
-    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.criado_em,
+    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.request_id,e.public_number,e.order_status,e.email_status,e.email_error,e.email_sent_at,e.criado_em,
             c.email AS cliente_email,c.telefone AS cliente_telefone
      FROM encomendas e
      LEFT JOIN clientes c ON c.id = e.cliente_id
@@ -774,6 +796,8 @@ function mapOrderRow(row) {
   return {
     id: Number(row.id),
     clientId: Number(row.cliente_id),
+    publicNumber: row.public_number || buildPublicOrderNumber(row.id, row.criado_em),
+    requestId: row.request_id || '',
     client: row.cliente_nome,
     nif: row.cliente_nif || '',
     email: row.cliente_email || '',
@@ -782,6 +806,10 @@ function mapOrderRow(row) {
     units: Number(row.unidades || 0),
     lines: Number(row.linhas || 0),
     notes: row.notas || '',
+    orderStatus: row.order_status || 'created',
+    emailStatus: row.email_status || 'pending',
+    emailError: row.email_error || '',
+    emailSentAt: row.email_sent_at || null,
     createdAt: iso,
     date,
     time
@@ -801,69 +829,6 @@ function mapOrderItemRow(row) {
   };
 }
 
-function normalizeCartItem(ref, item) {
-  const product = item && typeof item === 'object' ? item : {};
-  const cleanRef = String(ref || product.ref || '').trim();
-  if (!cleanRef) return null;
-  const qty = Math.max(1, parseInt(product.qty, 10) || 0);
-  const price = Number(product.price);
-  return {
-    key: String(product.key || `${cleanRef}|${String(product.cor || '').trim()}|${String(product.tam || '').trim()}`),
-    ref: cleanRef,
-    name: String(product.name || '').trim(),
-    type: String(product.type || '').trim(),
-    cor: String(product.cor || '').trim(),
-    tam: String(product.tam || '').trim(),
-    qty,
-    price: Number.isFinite(price) ? price : 0,
-    img: product.img ? String(product.img) : null
-  };
-}
-
-function normalizeCartPayload(items) {
-  if (!Array.isArray(items)) return [];
-  return items.map(function(item) {
-    return normalizeCartItem(item && item.ref, item);
-  }).filter(Boolean);
-}
-
-async function getCartState(clientId) {
-  const [rows] = await db.execute(
-    `SELECT payload, expires_at
-     FROM cart_states
-     WHERE cliente_id=? AND expires_at >= NOW()
-     LIMIT 1`,
-    [clientId]
-  );
-  if (!rows.length) {
-    await db.execute('DELETE FROM cart_states WHERE cliente_id=?', [clientId]);
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(rows[0].payload || '[]');
-    return normalizeCartPayload(parsed);
-  } catch (e) {
-    return [];
-  }
-}
-
-async function saveCartState(clientId, items) {
-  const payload = JSON.stringify(normalizeCartPayload(items));
-  await db.execute(
-    `INSERT INTO cart_states (cliente_id,payload,expires_at)
-     VALUES (?,?,DATE_ADD(NOW(), INTERVAL 7 DAY))
-     ON DUPLICATE KEY UPDATE
-       payload=VALUES(payload),
-       expires_at=VALUES(expires_at),
-       updated_at=CURRENT_TIMESTAMP`,
-    [clientId, payload]
-  );
-}
-
-async function clearCartState(clientId) {
-  await db.execute('DELETE FROM cart_states WHERE cliente_id=?', [clientId]);
-}
-
 async function getOrderById(orderId, opts = {}) {
   const { clientId = null, allowAdmin = false } = opts;
   const params = [orderId];
@@ -873,7 +838,7 @@ async function getOrderById(orderId, opts = {}) {
     params.push(clientId);
   }
   const [rows] = await db.execute(
-    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.criado_em,
+    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.request_id,e.public_number,e.order_status,e.email_status,e.email_error,e.email_sent_at,e.criado_em,
             c.email AS cliente_email,c.telefone AS cliente_telefone
      FROM encomendas e
      LEFT JOIN clientes c ON c.id = e.cliente_id
@@ -896,7 +861,7 @@ async function getOrderById(orderId, opts = {}) {
 
 async function listAllOrders() {
   const [rows] = await db.execute(
-    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.criado_em,
+    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.request_id,e.public_number,e.order_status,e.email_status,e.email_error,e.email_sent_at,e.criado_em,
             c.email AS cliente_email,c.telefone AS cliente_telefone
      FROM encomendas e
      LEFT JOIN clientes c ON c.id = e.cliente_id
@@ -912,49 +877,19 @@ function sendJSON(res, code, data) {
   res.end(JSON.stringify(data));
 }
 
-async function loadSessionsFromDB() {
-  const [rows] = await db.execute(
-    `SELECT token, cliente_id, admin, developer, expires_at
-     FROM sessions
-     WHERE expires_at >= NOW()`
-  );
-  sessions.clear();
-  rows.forEach(function(row){
-    sessions.set(row.token, {
-      id: Number(row.cliente_id),
-      admin: !!row.admin,
-      developer: !!row.developer,
-      expiresAt: new Date(row.expires_at).getTime()
-    });
-  });
-}
-
-async function createSession(client) {
+function createSession(client) {
   const token = crypto.randomBytes(24).toString('hex');
-  const expiresAt = Date.now() + SESSION_TTL_MS;
-  const session = {
+  sessions.set(token, {
     id: client.id,
     admin: !!client.admin,
     developer: !!client.developer,
-    expiresAt
-  };
-  sessions.set(token, session);
-  await db.execute(
-    `INSERT INTO sessions (token, cliente_id, admin, developer, expires_at)
-     VALUES (?, ?, ?, ?, FROM_UNIXTIME(? / 1000))
-     ON DUPLICATE KEY UPDATE
-       cliente_id=VALUES(cliente_id),
-       admin=VALUES(admin),
-       developer=VALUES(developer),
-       expires_at=VALUES(expires_at),
-       updated_at=CURRENT_TIMESTAMP`,
-    [token, client.id, session.admin ? 1 : 0, session.developer ? 1 : 0, expiresAt]
-  );
+    expiresAt: Date.now() + SESSION_TTL_MS
+  });
   return token;
 }
 
 function getSessionFromReq(req) {
-  const token = getRequestToken(req);
+  const token = req.headers['x-token'];
   if (!token || !sessions.has(token)) return null;
   const session = sessions.get(token);
   if (!session || session.expiresAt < Date.now()) {
@@ -962,10 +897,6 @@ function getSessionFromReq(req) {
     return null;
   }
   session.expiresAt = Date.now() + SESSION_TTL_MS;
-  db.execute(
-    `UPDATE sessions SET expires_at=FROM_UNIXTIME(? / 1000), updated_at=CURRENT_TIMESTAMP WHERE token=?`,
-    [session.expiresAt, token]
-  ).catch(function(){});
   return { token, ...session };
 }
 
@@ -1133,7 +1064,7 @@ async function getDeveloperSummary() {
 
 async function listRecentOrders(limit = 10) {
   const [rows] = await db.execute(
-    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.criado_em,
+    `SELECT e.id,e.cliente_id,e.cliente_nome,e.cliente_nif,e.total,e.unidades,e.linhas,e.notas,e.request_id,e.public_number,e.order_status,e.email_status,e.email_error,e.email_sent_at,e.criado_em,
             c.email AS cliente_email,c.telefone AS cliente_telefone
      FROM encomendas e
      LEFT JOIN clientes c ON c.id = e.cliente_id
@@ -1142,6 +1073,221 @@ async function listRecentOrders(limit = 10) {
     [Math.max(1, Math.min(50, Number(limit) || 10))]
   );
   return rows.map(mapOrderRow);
+}
+
+function normalizeCartSelectionItem(item) {
+  return {
+    ref: normalizeChoiceText(item && item.ref),
+    cor: normalizeChoiceText(item && item.cor),
+    tam: normalizeChoiceText(item && item.tam),
+    qty: Math.max(1, parseInt(item && item.qty, 10) || 0)
+  };
+}
+
+function mergeCartSelections(items) {
+  const merged = new Map();
+  for (const raw of Array.isArray(items) ? items : []) {
+    const item = normalizeCartSelectionItem(raw);
+    if (!item.ref || !item.cor || !item.tam || !Number.isInteger(item.qty) || item.qty <= 0) continue;
+    const key = cartItemKey(item);
+    const existing = merged.get(key);
+    if (existing) {
+      existing.qty += item.qty;
+    } else {
+      merged.set(key, { ...item });
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function normalizeQtyForProduct(product, qty) {
+  const step = normalizeQtyStep(product.qtd_step, product.tipo);
+  const value = Math.max(step, parseInt(qty, 10) || 0);
+  return Math.max(step, Math.ceil(value / step) * step);
+}
+
+async function loadProductsByRefs(refs) {
+  const uniqueRefs = Array.from(new Set((refs || []).map((ref) => String(ref || '').trim()).filter(Boolean)));
+  if (!uniqueRefs.length) return [];
+  const placeholders = uniqueRefs.map(() => '?').join(',');
+  const [rows] = await db.execute(
+    `SELECT ref,nome,tipo,cat,preco,pvp,cores,tams,qtd_step,imagem,ordem,activo,estacao
+     FROM produtos
+     WHERE ref IN (${placeholders})`,
+    uniqueRefs
+  );
+  return rows.map((row) => ({
+    ref: row.ref,
+    name: row.nome,
+    type: row.tipo || '',
+    cat: row.cat,
+    price: Number(row.preco),
+    pvp: row.pvp == null ? null : Number(row.pvp),
+    cores: parseArrayField(row.cores),
+    tams: parseArrayField(row.tams),
+    qtd_step: normalizeQtyStep(row.qtd_step, row.tipo),
+    image: row.imagem || '',
+    active: !!row.activo,
+    season: normalizeSeason(row.estacao)
+  }));
+}
+
+function validateVariantChoice(product, item, opts = {}) {
+  const strict = !!opts.strict;
+  if (!product) {
+    const err = new Error(`Produto ${item.ref} não encontrado.`);
+    err.code = 'PRODUCT_NOT_FOUND';
+    throw err;
+  }
+  if (!product.active && strict) {
+    const err = new Error(`O produto ${item.ref} está inativo.`);
+    err.code = 'PRODUCT_INACTIVE';
+    throw err;
+  }
+  if (product.cores.length && !product.cores.includes(item.cor)) {
+    const err = new Error(`Cor inválida para a referência ${item.ref}.`);
+    err.code = 'INVALID_COLOR';
+    throw err;
+  }
+  if (product.tams.length && !product.tams.includes(item.tam)) {
+    const err = new Error(`Tamanho inválido para a referência ${item.ref}.`);
+    err.code = 'INVALID_SIZE';
+    throw err;
+  }
+  const normalizedQty = normalizeQtyForProduct(product, item.qty);
+  if (strict && normalizedQty !== Number(item.qty)) {
+    const err = new Error(`Quantidade inválida para a referência ${item.ref}.`);
+    err.code = 'INVALID_QTY';
+    throw err;
+  }
+  return {
+    ref: product.ref,
+    name: product.name,
+    type: product.type,
+    cat: product.cat,
+    cor: item.cor,
+    tam: item.tam,
+    qty: normalizedQty,
+    price: Number(product.price),
+    pvp: product.pvp == null ? null : Number(product.pvp),
+    img: product.image || '',
+    active: product.active,
+    season: product.season,
+    qtdStep: normalizeQtyStep(product.qtd_step, product.type)
+  };
+}
+
+async function validateAndHydrateCartItems(items, opts = {}) {
+  const strict = !!opts.strict;
+  const merged = mergeCartSelections(items);
+  if (!merged.length) {
+    return { items: [], warnings: [], products: [] };
+  }
+  const products = await loadProductsByRefs(merged.map((item) => item.ref));
+  const map = new Map(products.map((product) => [product.ref, product]));
+  const hydrated = [];
+  const warnings = [];
+  for (const item of merged) {
+    const product = map.get(item.ref);
+    if (!product) {
+      if (strict) {
+        const err = new Error(`Produto ${item.ref} não encontrado.`);
+        err.code = 'PRODUCT_NOT_FOUND';
+        throw err;
+      }
+      warnings.push(`Produto ${item.ref} indisponível.`);
+      continue;
+    }
+    try {
+      hydrated.push(validateVariantChoice(product, item, { strict }));
+    } catch (e) {
+      if (strict) throw e;
+      warnings.push(e.message);
+    }
+  }
+  return { items: hydrated, warnings, products };
+}
+
+function parseCartStatePayload(rawValue) {
+  try {
+    if (!rawValue) return [];
+    const parsed = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function getStoredCartState(clientId) {
+  const [rows] = await db.execute(
+    'SELECT client_id,revision,items_json,updated_at FROM cart_states WHERE client_id=? LIMIT 1',
+    [clientId]
+  );
+  if (!rows.length) return { clientId, revision: 0, items: [], updatedAt: null };
+  return {
+    clientId: Number(rows[0].client_id),
+    revision: Number(rows[0].revision || 0),
+    items: parseCartStatePayload(rows[0].items_json),
+    updatedAt: rows[0].updated_at || null
+  };
+}
+
+async function saveCartState(clientId, items, expectedRevision, updatedBy = 'client') {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.execute(
+      'SELECT client_id,revision,items_json FROM cart_states WHERE client_id=? FOR UPDATE',
+      [clientId]
+    );
+    const currentRevision = rows.length ? Number(rows[0].revision || 0) : 0;
+    const expected = Number.isFinite(Number(expectedRevision)) ? Number(expectedRevision) : currentRevision;
+    if (rows.length && currentRevision !== expected) {
+      await conn.commit();
+      return { ok:false, revision: currentRevision, items: parseCartStatePayload(rows[0].items_json), conflict: true };
+    }
+    const nextRevision = currentRevision + 1;
+    const payload = JSON.stringify(Array.isArray(items) ? items : []);
+    if (rows.length) {
+      await conn.execute(
+        'UPDATE cart_states SET revision=?, items_json=?, updated_by=?, updated_at=NOW() WHERE client_id=?',
+        [nextRevision, payload, String(updatedBy || 'client').slice(0, 80), clientId]
+      );
+    } else {
+      await conn.execute(
+        'INSERT INTO cart_states (client_id,revision,items_json,updated_by) VALUES (?,?,?,?)',
+        [clientId, nextRevision, payload, String(updatedBy || 'client').slice(0, 80)]
+      );
+    }
+    await conn.commit();
+    return { ok:true, revision: nextRevision, items: Array.isArray(items) ? items : [] };
+  } catch (e) {
+    try { await conn.rollback(); } catch (rollbackErr) {}
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
+
+async function clearCartState(clientId, expectedRevision, updatedBy = 'client') {
+  return saveCartState(clientId, [], expectedRevision, updatedBy);
+}
+
+async function withCartLock(clientId, fn) {
+  const key = String(clientId);
+  const previous = cartWriteLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  cartWriteLocks.set(key, previous.then(() => current));
+  try {
+    await previous;
+    return await fn();
+  } finally {
+    release();
+    if (cartWriteLocks.get(key) === current) {
+      cartWriteLocks.delete(key);
+    }
+  }
 }
 
 function parseArrayField(value) {
@@ -1351,19 +1497,16 @@ async function applySeasonMode(mode) {
     await db.execute(
       "UPDATE produtos SET activo = CASE WHEN COALESCE(estacao,'ambos')='inverno' THEN 0 ELSE 1 END"
     );
-    await setSiteSetting('collection_mode', 'verao');
     return 'verao';
   }
   if (normalized === 'inverno') {
     await db.execute(
       "UPDATE produtos SET activo = CASE WHEN COALESCE(estacao,'ambos')='verao' THEN 0 ELSE 1 END"
     );
-    await setSiteSetting('collection_mode', 'inverno');
     return 'inverno';
   }
   if (normalized === 'todos') {
     await db.execute("UPDATE produtos SET activo = 1");
-    await setSiteSetting('collection_mode', 'todos');
     return 'todos';
   }
   throw new Error('Modo de colecao invalido');
@@ -1394,12 +1537,7 @@ function serveStaticFile(res, filePath) {
       return true;
     }
     const file = fs.readFileSync(filePath);
-    res.writeHead(200, {
-      'Content-Type': getMimeType(filePath),
-      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    });
+    res.writeHead(200, { 'Content-Type': getMimeType(filePath) });
     res.end(file);
     return true;
   } catch (e) {
@@ -1435,63 +1573,9 @@ async function handleRequest(req, res) {
   }
   // Servir app
   if (req.method === 'GET' && (url==='/'||url==='/index.html')) {
-    res.writeHead(302, { Location: '/entrar' });
-    res.end();
-    return;
-  }
-
-  if (req.method === 'GET' && url==='/entrar') {
     try {
-      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "login";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
-      res.writeHead(200, {
-        'Content-Type':'text/html; charset=utf-8',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      });
-      res.end(html);
-    } catch(e) { res.writeHead(404); res.end('App não encontrada'); }
-    return;
-  }
-
-  if (req.method === 'GET' && url === '/catalogo') {
-    const session = getSessionFromReq(req);
-    if (!session) {
-      res.writeHead(302, { Location: '/entrar' });
-      res.end();
-      return;
-    }
-    try {
-      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "catalog";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
-      res.writeHead(200, {
-        'Content-Type':'text/html; charset=utf-8',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      });
-      res.end(html);
-    } catch(e) { res.writeHead(404); res.end('App não encontrada'); }
-    return;
-  }
-
-  if (req.method === 'GET' && url === '/admin') {
-    const session = getSessionFromReq(req);
-    if (!session || !(session.admin || session.developer)) {
-      res.writeHead(302, { Location: '/entrar' });
-      res.end();
-      return;
-    }
-    try {
-      let html = fs.readFileSync(CONFIG.appFile, 'utf8');
-      html = html.replace('<script>window.VILLAS_APP_VERSION = "20260811-15";</script>', '<script>window.VILLAS_INITIAL_VIEW = "admin";</script>\n<script>window.VILLAS_APP_VERSION = "20260811-15";</script>');
-      res.writeHead(200, {
-        'Content-Type':'text/html; charset=utf-8',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      });
+      const html = fs.readFileSync(CONFIG.appFile, 'utf8');
+      res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8' });
       res.end(html);
     } catch(e) { res.writeHead(404); res.end('App não encontrada'); }
     return;
@@ -1500,50 +1584,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url === '/produtos') {
     const categorias = await listCategories();
     const produtos = await listProducts();
-    return sendJSON(res, 200, {
-      ok:true,
-      categorias,
-      produtos,
-      collectionMode: getCollectionModeSetting()
-    });
-  }
-
-  if (req.method === 'GET' && url === '/site-settings') {
-    return sendJSON(res, 200, {
-      ok:true,
-      ...getPublicSiteSettings(),
-      smtpReady: !!smtpStatus.ready,
-      smtpMessage: smtpStatus.message || ''
-    });
-  }
-
-  if (req.method === 'GET' && url === '/me') {
-    const session = requireSession(req, false);
-    const client = await getClientById(session.id);
-    if (!client) {
-      return sendJSON(res, 404, { ok:false, message:'Cliente não encontrado' });
-    }
-    return sendJSON(res, 200, {
-      ok:true,
-      id: client.id,
-      nome: client.nome,
-      nif: client.nif || '',
-      email: client.email || '',
-      telefone: client.telefone || '',
-      admin: !!client.admin,
-      developer: !!client.developer,
-      token: session.token
-    });
-  }
-
-  if (req.method === 'POST' && url === '/logout') {
-    const session = getSessionFromReq(req);
-    if (session) {
-      sessions.delete(session.token);
-      await db.execute('DELETE FROM sessions WHERE token=?', [session.token]).catch(function(){});
-    }
-    res.setHeader('Set-Cookie', buildClearedSessionCookie());
-    return sendJSON(res, 200, { ok:true });
+    return sendJSON(res, 200, { ok:true, categorias, produtos });
   }
 
   // Login
@@ -1558,8 +1599,7 @@ async function handleRequest(req, res) {
     }
     await db.execute('UPDATE clientes SET ultimo_login=NOW() WHERE id=?', [rows[0].id]);
     await logLoginAttempt(req, { user: data.user, clienteId: rows[0].id, nome: rows[0].nome, success: true });
-    const token = await createSession(rows[0]);
-    res.setHeader('Set-Cookie', buildSessionCookie(token, SESSION_TTL_MS / 1000));
+    const token = createSession(rows[0]);
     return sendJSON(res, 200, {
       ok:true,
       id:rows[0].id,
@@ -1573,20 +1613,140 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (req.method === 'GET' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    const stored = await getStoredCartState(session.id);
+    const hydrated = await validateAndHydrateCartItems(stored.items, { strict: false });
+    return sendJSON(res, 200, {
+      ok: true,
+      revision: stored.revision || 0,
+      items: hydrated.items,
+      warnings: hydrated.warnings || []
+    });
+  }
+
+  if (req.method === 'PUT' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    const revision = Number(data.revision ?? data.cart_revision ?? data.cartRevision ?? 0);
+    try {
+      const hydrated = await validateAndHydrateCartItems(data.items || [], { strict: true });
+      const result = await withCartLock(session.id, async () => {
+        const saved = await saveCartState(session.id, hydrated.items, revision, `client#${session.id}`);
+        return saved;
+      });
+      if (!result.ok) {
+        const current = await validateAndHydrateCartItems(result.items || [], { strict: false });
+        return sendJSON(res, 409, {
+          ok: false,
+          message: 'Carrinho desatualizado. Atualiza a página para sincronizar.',
+          revision: result.revision || 0,
+          items: current.items
+        });
+      }
+      return sendJSON(res, 200, {
+        ok: true,
+        revision: result.revision || 0,
+        items: hydrated.items
+      });
+    } catch (e) {
+      if (e.code === 'PRODUCT_NOT_FOUND' || e.code === 'PRODUCT_INACTIVE' || e.code === 'INVALID_COLOR' || e.code === 'INVALID_SIZE' || e.code === 'INVALID_QTY') {
+        return sendJSON(res, 400, { ok:false, message:e.message });
+      }
+      if (e.code === 'UNAUTHORIZED') {
+        return sendJSON(res, 401, { ok:false, message:e.message });
+      }
+      return sendJSON(res, 500, { ok:false, message:e.message });
+    }
+  }
+
+  if (req.method === 'DELETE' && url === '/me/cart') {
+    const session = requireSession(req, false);
+    const revision = Number(data.revision ?? data.cart_revision ?? data.cartRevision ?? 0);
+    try {
+      const result = await withCartLock(session.id, async () => {
+        return clearCartState(session.id, revision, `checkout#${session.id}`);
+      });
+      if (!result.ok) {
+        return sendJSON(res, 409, {
+          ok:false,
+          message:'Carrinho desatualizado.',
+          revision: result.revision || 0,
+          items: []
+        });
+      }
+      return sendJSON(res, 200, { ok:true, revision: result.revision || 0, items: [] });
+    } catch (e) {
+      return sendJSON(res, 500, { ok:false, message:e.message });
+    }
+  }
+
   // Receber encomenda
   if (req.method==='POST' && url==='/encomenda') {
     try {
       const session = requireSession(req, false);
-      const eid = await saveOrder(session.id, data);
-      await sendEmail(data);
-      await clearCartState(session.id).catch(function() {});
-      return sendJSON(res, 200, { ok:true, encId:eid, message:'Encomenda enviada com sucesso!' });
+      const expectedCartRevision = Number(data.cart_revision ?? data.cartRevision ?? 0);
+      const storedCart = await getStoredCartState(session.id);
+      if (storedCart.revision !== expectedCartRevision) {
+        const hydratedCart = await validateAndHydrateCartItems(storedCart.items, { strict: false });
+        return sendJSON(res, 409, {
+          ok:false,
+          message:'Carrinho desatualizado. Volta a abrir a encomenda.',
+          revision: storedCart.revision || 0,
+          items: hydratedCart.items
+        });
+      }
+      const saved = await saveOrder(session.id, data);
+      const order = await getOrderById(saved.id, { clientId: session.id, allowAdmin: false });
+      if (!order) {
+        return sendJSON(res, 500, { ok:false, message:'Encomenda gravada mas não foi possível ler o registo.' });
+      }
+      let emailStatus = 'pending';
+      let emailError = '';
+      if (String(order.emailStatus || '').toLowerCase() !== 'sent') {
+        try {
+          await sendEmail(order);
+          emailStatus = 'sent';
+          await db.execute(
+            'UPDATE encomendas SET email_status=?, email_error=NULL, email_sent_at=NOW() WHERE id=?',
+            [emailStatus, saved.id]
+          );
+        } catch (emailErr) {
+          emailStatus = 'failed';
+          emailError = emailErr.message || 'Falha no envio do email';
+          await db.execute(
+            'UPDATE encomendas SET email_status=?, email_error=? WHERE id=?',
+            [emailStatus, emailError, saved.id]
+          );
+        }
+      } else {
+        emailStatus = 'sent';
+      }
+      try {
+        await withCartLock(session.id, async () => {
+          await clearCartState(session.id, Number(data.cart_revision ?? data.cartRevision ?? 0), `checkout#${session.id}`);
+        });
+      } catch (cartErr) {}
+      const freshOrder = await getOrderById(saved.id, { clientId: session.id, allowAdmin: false });
+      return sendJSON(res, 200, {
+        ok:true,
+        encId:saved.id,
+        publicNumber: saved.publicNumber || (freshOrder && freshOrder.publicNumber) || buildPublicOrderNumber(saved.id, freshOrder && freshOrder.createdAt),
+        emailStatus,
+        emailError,
+        cartRevision: (await getStoredCartState(session.id)).revision || 0,
+        message: emailStatus === 'sent'
+          ? 'Encomenda criada com sucesso!'
+          : 'Encomenda criada, mas o email falhou.'
+      });
     } catch(e) {
       if (e.code === 'INVALID_CLIENT') {
         return sendJSON(res, 401, { ok:false, message:e.message });
       }
       if (e.code === 'UNAUTHORIZED') {
         return sendJSON(res, 401, { ok:false, message:e.message });
+      }
+      if (e.code === 'MISSING_REQUEST_ID') {
+        return sendJSON(res, 400, { ok:false, message:e.message });
       }
       if (e.code === 'MIN_ORDER_TOTAL') {
         return sendJSON(res, 400, { ok:false, message:e.message });
@@ -1599,25 +1759,6 @@ async function handleRequest(req, res) {
     const session = requireSession(req, false);
     const encomendas = await listClientOrders(session.id);
     return sendJSON(res, 200, { ok:true, encomendas });
-  }
-
-  if (req.method === 'GET' && url === '/me/cart') {
-    const session = requireSession(req, false);
-    const cart = await getCartState(session.id);
-    return sendJSON(res, 200, { ok:true, cart });
-  }
-
-  if (req.method === 'PUT' && url === '/me/cart') {
-    const session = requireSession(req, false);
-    const cart = normalizeCartPayload(Array.isArray(data.cart) ? data.cart : (Array.isArray(data.items) ? data.items : []));
-    await saveCartState(session.id, cart);
-    return sendJSON(res, 200, { ok:true, cart });
-  }
-
-  if (req.method === 'DELETE' && url === '/me/cart') {
-    const session = requireSession(req, false);
-    await clearCartState(session.id);
-    return sendJSON(res, 200, { ok:true, cart:[] });
   }
 
   const myOrderMatch = url.match(/^\/me\/encomendas\/(\d+)$/);
@@ -1667,10 +1808,11 @@ async function handleRequest(req, res) {
       return;
     }
     const safeName = (encomenda.client || 'cliente').replace(/[^\w.-]+/g, '_');
+    const publicNumber = encomenda.publicNumber || encomenda.public_number || buildPublicOrderNumber(encomenda.id, encomenda.createdAt);
     const suffix = hidePrices ? '_sem_precos' : '';
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="encomenda_${safeName}_${orderId}${suffix}.pdf"`
+      'Content-Disposition': `attachment; filename="${publicNumber}_${safeName}${suffix}.pdf"`
     });
     res.end(pdf);
     return;
@@ -1681,12 +1823,7 @@ async function handleRequest(req, res) {
     requireSession(req, true);
     const categorias = await listCategories(true);
     const produtos = await listProducts(true);
-    return sendJSON(res, 200, {
-      ok:true,
-      categorias,
-      produtos,
-      collectionMode: getCollectionModeSetting()
-    });
+    return sendJSON(res, 200, { ok:true, categorias, produtos });
   }
 
   if (req.method==='POST' && url==='/admin/produtos') {
@@ -1719,34 +1856,6 @@ async function handleRequest(req, res) {
     } catch (e) {
       return sendJSON(res, 400, { ok:false, message:e.message });
     }
-  }
-
-  if (req.method==='GET' && url==='/admin/produtos/colecao') {
-    requireSession(req, true);
-    return sendJSON(res, 200, {
-      ok:true,
-      modo: getCollectionModeSetting()
-    });
-  }
-
-  if (req.method==='GET' && url==='/admin/site-settings') {
-    requireSession(req, true);
-    return sendJSON(res, 200, {
-      ok:true,
-      ...getPublicSiteSettings()
-    });
-  }
-
-  if (req.method==='PUT' && url==='/admin/site-settings') {
-    requireSession(req, true);
-    if (data.showInactiveProducts != null) {
-      await setSiteSetting('show_inactive_products', data.showInactiveProducts ? '1' : '0');
-    }
-    if (data.collectionMode != null) {
-      const mode = await applySeasonMode(data.collectionMode);
-      return sendJSON(res, 200, { ok:true, mode, ...getPublicSiteSettings() });
-    }
-    return sendJSON(res, 200, { ok:true, ...getPublicSiteSettings() });
   }
 
   const prodM = url.match(/^\/admin\/produtos\/([^/]+)$/);

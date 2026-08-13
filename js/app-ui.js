@@ -1,17 +1,5 @@
 ﻿// Focus user field on load
-try{
-  if(typeof window.showInactiveProducts === "undefined"){
-    window.showInactiveProducts = true;
-  }
-  if(typeof window.collectionMode === "undefined" || !window.collectionMode){
-    window.collectionMode = "personalizada";
-  }
-}catch(e){}
-
 function ensureCatalogReadyOnStartup(){
-  if(typeof loadSiteSettingsFromServer === "function"){
-    loadSiteSettingsFromServer().catch(function(){ return false; });
-  }
   if(typeof reloadCatalogFromServer !== "function") return;
   reloadCatalogFromServer()
     .then(function(){
@@ -23,20 +11,72 @@ function ensureCatalogReadyOnStartup(){
     .then(function(){
       if(typeof refreshCatalogUi === "function") refreshCatalogUi();
       else if(typeof renderCatalogShell === "function") renderCatalogShell();
-      if(typeof syncCartFromServer === "function"){
-        return syncCartFromServer().catch(function(){ return false; });
-      }
     })
     .catch(function(){});
 }
 
 setTimeout(function(){
-  if(typeof bootstrapSessionFromServer === "function" && typeof shouldAutoBootstrapSession === "function" && shouldAutoBootstrapSession()){
-    bootstrapSessionFromServer().catch(function(){ return false; });
-    return;
-  }
-  if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
-  if(typeof finishAuthCheck === "function") finishAuthCheck();
+  try{
+    var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token");
+    var savedUser  = sessionStorage.getItem("villas_client") || localStorage.getItem("villas_client");
+    var expiresAt  = parseInt(localStorage.getItem("villas_session_expires")||"0", 10);
+    if(savedUser && expiresAt && Date.now() < expiresAt){
+      authToken = savedToken || "";
+      loggedClient = JSON.parse(savedUser);
+      localStorage.setItem("villas_session_expires", String(Date.now() + SESSION_TTL_MS));
+      document.getElementById("login-screen").style.display="none";
+      setLoginScreenActive(false);
+      setDeveloperMode(!!loggedClient.developer);
+      if(loggedClient.name) document.getElementById("cname").value = loggedClient.name;
+      if(loggedClient.nif) document.getElementById("cnif").value = loggedClient.nif;
+      updateAreaButton();
+      updateUserGreeting();
+      if(loggedClient.admin && !loggedClient.developer){
+        document.getElementById("admin-settings-btn").classList.add("on");
+        document.getElementById("new-prod-btn").classList.add("on");
+        enableAdminProductEdit();
+        loadAdminNotifications();
+        reloadCatalogFromServer()
+          .catch(function(){ return false; })
+          .then(function(){
+            return reloadCategoriesFromServer().catch(function(){ return false; });
+          })
+          .then(function(updated){
+            if(updated || Object.keys(PRODS||{}).length) refreshCatalogUi();
+          })
+          .catch(function(){});
+      } else {
+        ADMIN_NOTIFICATIONS = [];
+        updateNotificationButton();
+      }
+      if(loggedClient.developer){
+        openDeveloperDashboard();
+      }
+      document.getElementById("logout-btn").classList.add("on");
+      clearOrderRequestId();
+      if(typeof loadCartFromServer === "function"){
+        loadCartFromServer();
+      }
+      setTimeout(function(){
+        updateStickyOffsets();
+        syncMobileCompactState();
+      }, 0);
+      ensureCatalogReadyOnStartup();
+      return;
+    }
+  }catch(e){}
+  try{
+    sessionStorage.removeItem("villas_token");
+    sessionStorage.removeItem("villas_client");
+    localStorage.removeItem("villas_token");
+    localStorage.removeItem("villas_client");
+    localStorage.removeItem("villas_session_expires");
+  }catch(e){}
+  updateUserGreeting();
+  setLoginScreenActive(true);
+  setMobileCompact(false);
+  ensureCatalogReadyOnStartup();
+  document.getElementById("l-user").focus();
 }, 100);
 
 window.addEventListener("resize", updateStickyOffsets);
@@ -56,25 +96,29 @@ document.addEventListener("wheel", function(e){
 }, { passive:false });
 
 function doLogout(){
-  var finish = function(){
-    if(typeof sessionExpiryHandled !== "undefined") sessionExpiryHandled = false;
-    clearAuthenticatedState();
-    closeNotifications();
-    setDeveloperMode(false);
-    location.reload();
-  };
-  if(typeof logoutSessionOnServer === "function"){
-    logoutSessionOnServer().finally(finish);
-  } else {
-    finish();
-  }
+  loggedClient = null;
+  authToken = null;
+  ADMIN_NOTIFICATIONS = [];
+  DEV_SUMMARY = null;
+  DEV_STATUS_DATA = null;
+  DEV_NOTES = [];
+  DEV_ALL_LOGINS = [];
+  DEV_LOGIN_LOGS = [];
+  DEV_RECENT_ORDERS = [];
+  cart = [];
+  cartRevision = 0;
+  clearOrderRequestId();
+  if(typeof renderCart === "function") renderCart();
+  clearStoredSession();
+  closeNotifications();
+  setDeveloperMode(false);
+  location.reload();
 }
 
 function openAdminSettings(){
   if(!loggedClient || !loggedClient.admin) return;
   setCategoryStatus("", "");
   setSmtpFeedback("", "");
-  loadCollectionModeFromServer();
   reloadCategoriesFromServer()
     .then(function(updated){
       if(updated) refreshCatalogUi();
@@ -84,9 +128,6 @@ function openAdminSettings(){
       renderCategoryManager();
     });
   loadAdminEmailSettings();
-  setSettingsTab("collection");
-  updateCollectionSummary();
-  updateInactiveToggleButton();
   document.getElementById("settings-bg").classList.add("on");
 }
 function closeAdminSettings(){
@@ -103,115 +144,6 @@ function setSmtpFeedback(msg, kind){
   if(!el) return;
   el.textContent = msg || "";
   el.className = "smtp-feedback" + (kind ? " " + kind : "");
-}
-function setSettingsTab(tab){
-  var current = tab || "collection";
-  window.__VILLAS_SETTINGS_TAB__ = current;
-  document.querySelectorAll("[data-set-tab]").forEach(function(btn){
-    btn.classList.toggle("on", btn.getAttribute("data-set-tab") === current);
-  });
-  document.querySelectorAll("[data-set-panel]").forEach(function(panel){
-    panel.classList.toggle("on", panel.getAttribute("data-set-panel") === current);
-  });
-}
-function getCollectionModeLabel(mode){
-  var map = {
-    verao: "Verão",
-    inverno: "Inverno",
-    todos: "Tudo",
-    personalizada: "Personalizada"
-  };
-  return map[String(mode || "").toLowerCase()] || "Personalizada";
-}
-function inferCollectionModeFromCatalog(){
-  var products = Object.keys(PRODS || {}).map(function(ref){ return PRODS[ref]; }).filter(Boolean);
-  if(!products.length) return "todos";
-  var summer = 0, winter = 0, both = 0;
-  var summerOff = 0, winterOff = 0, bothOff = 0;
-  products.forEach(function(p){
-    var season = String(p.season || "ambos").toLowerCase();
-    var isActive = p.active !== false;
-    if(season === "verao"){
-      if(isActive) summer++; else summerOff++;
-    } else if(season === "inverno"){
-      if(isActive) winter++; else winterOff++;
-    } else {
-      if(isActive) both++; else bothOff++;
-    }
-  });
-  if(summer > 0 && winterOff > 0 && summerOff === 0 && bothOff === 0) return "verao";
-  if(winter > 0 && summerOff > 0 && winterOff === 0 && bothOff === 0) return "inverno";
-  if(summerOff === 0 && winterOff === 0 && bothOff === 0) return "todos";
-  return "personalizada";
-}
-function updateInactiveToggleButton(){
-  var btn = document.getElementById("settings-toggle-inactive");
-  if(!btn) return;
-  var isShowing = window.showInactiveProducts !== false;
-  btn.classList.toggle("is-on", isShowing);
-  btn.innerHTML = isShowing
-    ? "Ocultar itens desativados<small>Esconde os produtos inativos no catálogo enquanto trabalhas.</small>"
-    : "Mostrar itens desativados<small>Volta a mostrar os produtos desativados no catálogo.</small>";
-}
-function updateCollectionSummary(){
-  var titleEl = document.getElementById("collection-summary-title");
-  var textEl = document.getElementById("collection-summary-text");
-  var chipsEl = document.getElementById("collection-summary-chips");
-  if(!titleEl || !textEl || !chipsEl) return;
-  var products = Object.keys(PRODS || {}).map(function(ref){ return PRODS[ref]; }).filter(Boolean);
-  var activeCount = products.filter(function(p){ return p.active !== false; }).length;
-  var inactiveCount = products.length - activeCount;
-  var currentMode = window.collectionMode || inferCollectionModeFromCatalog();
-  window.collectionMode = currentMode;
-  titleEl.textContent = getCollectionModeLabel(currentMode);
-  textEl.textContent = activeCount + " produto" + (activeCount !== 1 ? "s" : "") + " ativos · " + inactiveCount + " inativo" + (inactiveCount !== 1 ? "s" : "");
-  chipsEl.innerHTML = ""
-    + "<span class='set-chip'>" + activeCount + " ativos</span>"
-    + "<span class='set-chip'>" + inactiveCount + " inativos</span>"
-    + "<span class='set-chip'>" + getCollectionModeLabel(currentMode) + "</span>";
-}
-function loadCollectionModeFromServer(){
-  if(!loggedClient || !loggedClient.admin) return Promise.resolve(false);
-  return fetch("/admin/site-settings", {
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { "X-Token": authToken || "" }
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(res){
-    if(!res.ok) throw new Error(res.message || "Nao foi possivel carregar o modo de colecao.");
-    if(res.collectionMode){
-      window.collectionMode = String(res.collectionMode || "personalizada").toLowerCase();
-    }
-    if(typeof res.showInactiveProducts !== "undefined"){
-      window.showInactiveProducts = !!res.showInactiveProducts;
-    }
-    updateCollectionSummary();
-    updateInactiveToggleButton();
-    if(typeof refreshCatalogVisibility === "function") refreshCatalogVisibility();
-    return true;
-  })
-  .catch(function(){ return false; });
-}
-function toggleInactiveProducts(){
-  if(!loggedClient || !loggedClient.admin) return;
-  var nextValue = window.showInactiveProducts === false ? true : false;
-  fetch("/admin/site-settings", {
-    method: "PUT",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
-    body: JSON.stringify({ showInactiveProducts: nextValue })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(res){
-    if(!res.ok) throw new Error(res.message || "Nao foi possivel guardar a visibilidade.");
-    window.showInactiveProducts = !!res.showInactiveProducts;
-    updateInactiveToggleButton();
-    if(typeof refreshCatalogVisibility === "function") refreshCatalogVisibility();
-    return true;
-  })
-  .catch(function(){ return false; });
 }
 function setSmtpStatusCard(status){
   var card = document.getElementById("smtp-status-card");
@@ -241,7 +173,7 @@ function fillSmtpSettings(config, status){
 function loadAdminEmailSettings(){
   if(!loggedClient || !loggedClient.admin) return Promise.resolve(false);
   setSmtpStatusCard({ ready:false, message:"A verificar SMTP..." });
-  return fetch("/admin/email-config", {
+  return fetch(BASE_URL + "/admin/email-config", {
     headers: { "X-Token": authToken || "" }
   })
   .then(function(r){ return r.json(); })
@@ -271,7 +203,7 @@ function saveAdminEmailSettings(){
     return;
   }
   setSmtpFeedback("A atualizar configuração SMTP...", "");
-  fetch("/admin/email-config", {
+  fetch(BASE_URL + "/admin/email-config", {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
     body: JSON.stringify(payload)
@@ -287,15 +219,6 @@ function saveAdminEmailSettings(){
     setSmtpFeedback(err.message || "Nao foi possivel atualizar o SMTP.", "err");
   });
 }
-function openSmtpHelp(){
-  setSmtpFeedback(
-    "Se a password der erro, faz isto: 1) ativa a Verificação em dois passos; 2) cria uma Senha de app; 3) cola essa senha aqui no campo Password / app password.",
-    ""
-  );
-  window.open("https://myaccount.google.com/security", "_blank", "noopener,noreferrer");
-  window.open("https://myaccount.google.com/apppasswords", "_blank", "noopener,noreferrer");
-  window.open("https://support.google.com/mail/answer/185833", "_blank", "noopener,noreferrer");
-}
 function renderCategoryManager(){
   var listEl = document.getElementById("category-list");
   if(!listEl) return;
@@ -304,34 +227,25 @@ function renderCategoryManager(){
     listEl.innerHTML = "<div class='cat-empty'>Ainda nao existem categorias.</div>";
     return;
   }
-  var activeCats = dynamicCats.filter(function(cat){ return cat.active !== false; });
-  var inactiveCats = dynamicCats.filter(function(cat){ return cat.active === false; });
-  function renderCatGroup(title, cats, tone){
-    return "<div class='cat-group " + tone + "'>" +
-      "<div class='cat-group-head'><h5>" + escH(title) + "</h5><span>" + cats.length + " categoria" + (cats.length !== 1 ? "s" : "") + "</span></div>" +
-      "<div class='cat-group-list'>" + cats.map(function(cat){
-        var count = (CAT_ITEMS[cat.id] || []).length;
-        var isActive = cat.active !== false;
-        return "<div class='cat-item" + (isActive ? "" : " is-off") + "' data-cat-id='" + escAttr(cat.id) + "'>" +
-          "<div class='cat-item-meta'><div><strong>" + escH(cat.label) + "</strong><span>" + count + " produto" + (count!==1?"s":"") + " nesta categoria" + (isActive ? "" : " · desativada") + "</span></div></div>" +
-          "<div class='cat-item-actions'>" +
-          "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='up'>&uarr;</button>" +
-          "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='down'>&darr;</button>" +
-          "<button type='button' class='cat-btn' data-cat-edit='" + escAttr(cat.id) + "'>Editar</button>" +
-          "<button type='button' class='cat-btn cat-btn-toggle " + (isActive ? "on" : "off") + "' data-cat-toggle='" + escAttr(cat.id) + "' data-next-active='" + (isActive ? "0" : "1") + "'>" + (isActive ? "Desativar" : "Ativar") + "</button>" +
-          "<button type='button' class='cat-btn cat-btn-delete' data-cat-delete='" + escAttr(cat.id) + "'" + (count>0 ? " title='Remove primeiro os produtos desta categoria'" : "") + ">Apagar</button>" +
-          "</div></div>";
-      }).join("") + "</div>" +
-    "</div>";
-  }
-  listEl.innerHTML = renderCatGroup("Categorias ativas", activeCats, "tone-active")
-    + renderCatGroup("Categorias desativadas", inactiveCats, "tone-off");
+  listEl.innerHTML = dynamicCats.map(function(cat){
+    var count = (CAT_ITEMS[cat.id] || []).length;
+    var isActive = cat.active !== false;
+    return "<div class='cat-item" + (isActive ? "" : " is-off") + "' data-cat-id='" + escAttr(cat.id) + "'>" +
+      "<div class='cat-item-meta'><div><strong>" + escH(cat.label) + "</strong><span>" + count + " produto" + (count!==1?"s":"") + " nesta categoria" + (isActive ? "" : " · desativada") + "</span></div></div>" +
+      "<div class='cat-item-actions'>" +
+      "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='up'>&uarr;</button>" +
+      "<button type='button' class='cat-btn cat-btn-order' data-cat-move='" + escAttr(cat.id) + "' data-cat-dir='down'>&darr;</button>" +
+      "<button type='button' class='cat-btn' data-cat-edit='" + escAttr(cat.id) + "'>Editar</button>" +
+      "<button type='button' class='cat-btn cat-btn-toggle " + (isActive ? "on" : "off") + "' data-cat-toggle='" + escAttr(cat.id) + "' data-next-active='" + (isActive ? "0" : "1") + "'>" + (isActive ? "Desativar" : "Ativar") + "</button>" +
+      "<button type='button' class='cat-btn cat-btn-delete' data-cat-delete='" + escAttr(cat.id) + "'" + (count>0 ? " title='Remove primeiro os produtos desta categoria'" : "") + ">Apagar</button>" +
+      "</div></div>";
+  }).join("");
 }
 function persistCategoryOrder(order, successMsg){
   var ordem = Array.isArray(order) ? order.slice() : [];
   if(!ordem.length) return;
   setCategoryStatus("A guardar ordem das categorias...", "");
-  fetch("/admin/categorias/ordem", {
+  fetch(BASE_URL + "/admin/categorias/ordem", {
     method: "POST",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ ordem: ordem })
@@ -358,7 +272,6 @@ function refreshCatalogUi(){
   renderCatalogShell();
   refreshCatalogVisibility();
   renderCategoryManager();
-  updateCollectionSummary();
   var peditCat = document.getElementById("pedit-cat");
   if(peditCat) peditCat.innerHTML = buildCategoryOptions(activeCat);
 }
@@ -394,7 +307,7 @@ function createCategoryFromSettings(){
     return;
   }
   setCategoryStatus("A criar categoria...", "");
-  fetch("/admin/categorias", {
+  fetch(BASE_URL + "/admin/categorias", {
     method: "POST",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: label })
@@ -429,7 +342,7 @@ function deleteCategoryFromSettings(catId){
   }).then(function(ok){
     if(!ok) return;
     setCategoryStatus("A apagar categoria...", "");
-    fetch("/admin/categorias/" + encodeURIComponent(catId), {
+    fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
       method: "DELETE",
       headers: { "X-Token": authToken||"" }
     })
@@ -459,7 +372,7 @@ function editCategoryFromSettings(catId){
     return;
   }
   setCategoryStatus("A guardar categoria...", "");
-  fetch("/admin/categorias/" + encodeURIComponent(catId), {
+  fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: nextLabel, activo: cat.active !== false })
@@ -481,7 +394,7 @@ function toggleCategoryFromSettings(catId, nextActive){
   if(!cat) return;
   var willActivate = String(nextActive) === "1";
   setCategoryStatus((willActivate ? "A ativar" : "A desativar") + " categoria...", "");
-  fetch("/admin/categorias/" + encodeURIComponent(catId), {
+  fetch(BASE_URL + "/admin/categorias/" + encodeURIComponent(catId), {
     method: "PUT",
     headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
     body: JSON.stringify({ label: cat.label, activo: willActivate })
@@ -542,7 +455,7 @@ function importCatalogData(file){
       var categoryChain = categories.reduce(function(prev, cat){
         return prev.then(function(){
           var exists = CATS.some(function(current){ return current.id === cat.id; });
-          var url = "/admin/categorias" + (exists ? "/" + encodeURIComponent(cat.id) : "");
+          var url = BASE_URL + "/admin/categorias" + (exists ? "/" + encodeURIComponent(cat.id) : "");
           var method = exists ? "PUT" : "POST";
           var body = exists
             ? { label: cat.label, activo: cat.active !== false }
@@ -560,7 +473,7 @@ function importCatalogData(file){
       categoryChain
         .then(function(){
           if(!categories.length) return;
-          return fetch("/admin/categorias/ordem", {
+          return fetch(BASE_URL + "/admin/categorias/ordem", {
             method: "POST",
             headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
             body: JSON.stringify({ ordem: categories.map(function(cat){ return cat.id; }) })
@@ -572,7 +485,7 @@ function importCatalogData(file){
           return products.reduce(function(prev, product){
             return prev.then(function(){
               var exists = !!PRODS[product.ref];
-              var url = "/admin/produtos" + (exists ? "/" + encodeURIComponent(product.ref) : "");
+              var url = BASE_URL + "/admin/produtos" + (exists ? "/" + encodeURIComponent(product.ref) : "");
               var method = exists ? "PUT" : "POST";
               return fetch(url, {
                 method: method,
@@ -609,7 +522,7 @@ function applyCollectionMode(mode){
     confirmLabel: "Aplicar"
   }).then(function(ok){
     if(!ok) return;
-    fetch("/admin/produtos/colecao", {
+    fetch(BASE_URL + "/admin/produtos/colecao", {
       method: "POST",
       headers: { "Content-Type":"application/json", "X-Token": authToken||"" },
       body: JSON.stringify({ modo: mode })
@@ -617,11 +530,7 @@ function applyCollectionMode(mode){
     .then(function(r){ return r.json(); })
     .then(function(res){
       if(!res.ok) throw new Error(res.message||"Nao foi possivel atualizar a colecao.");
-      if(res.modo){
-        window.collectionMode = res.modo;
-      }
       closeAdminSettings();
-      updateCollectionSummary();
       return refreshCatalogUiFromServer("Colecao atualizada com sucesso.");
     })
     .catch(function(err){
@@ -634,21 +543,12 @@ function formatMoney(value){
   return Number(value || 0).toFixed(2).replace(".", ",") + "€";
 }
 
-function parseLocalDateValue(value){
-  if(!value) return null;
-  if(value instanceof Date && !isNaN(value.getTime())) return value;
-  var str = String(value).trim();
-  if(!str) return null;
-  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) str = str.replace(" ", "T");
-  var d = new Date(str);
-  if(isNaN(d.getTime())) return null;
-  return d;
-}
-
 function formatDateTime(iso, fallbackDate, fallbackTime){
-  var d = parseLocalDateValue(iso);
-  if(d){
-    return d.toLocaleDateString("pt-PT") + " " + d.toLocaleTimeString("pt-PT", { hour:"2-digit", minute:"2-digit" });
+  if(iso){
+    var d = new Date(iso);
+    if(!isNaN(d.getTime())){
+      return d.toLocaleDateString("pt-PT") + " " + d.toLocaleTimeString("pt-PT", { hour:"2-digit", minute:"2-digit" });
+    }
   }
   return [fallbackDate || "", fallbackTime || ""].join(" ").trim();
 }
@@ -661,37 +561,6 @@ function areaTabsMarkup(isAdmin){
     + "<button class='area-tab" + (areaTab==="clientes"?" on":"") + "' data-area-tab='clientes'>Clientes</button>"
     + "<button class='area-tab" + (areaTab==="encomendas"?" on":"") + "' data-area-tab='encomendas'>Encomendas</button>"
     + "</div>";
-}
-
-function buildStatCard(label, value, hint, tone){
-  return "<article class='stat-card" + (tone ? " " + tone : "") + "'>"
-    + "<span>" + escH(label) + "</span>"
-    + "<strong>" + escH(value) + "</strong>"
-    + (hint ? "<small>" + escH(hint) + "</small>" : "")
-    + "</article>";
-}
-
-function buildAdminIntro(title, subtitle, actionsHtml){
-  return "<section class='admin-intro'>"
-    + "<div class='admin-intro-copy'>"
-      + "<div class='admin-kicker'>Gestão interna</div>"
-      + "<h3>" + escH(title) + "</h3>"
-      + "<p>" + escH(subtitle) + "</p>"
-    + "</div>"
-    + "<div class='admin-intro-actions'>" + (actionsHtml || "") + "</div>"
-    + "</section>";
-}
-
-function sumOrderTotal(list){
-  return (list || []).reduce(function(acc, order){
-    return acc + Number(order.total || 0);
-  }, 0);
-}
-
-function sumOrderUnits(list){
-  return (list || []).reduce(function(acc, order){
-    return acc + Number(order.units || 0);
-  }, 0);
 }
 
 function buildOrderCard(order, opts){
@@ -708,25 +577,19 @@ function buildOrderCard(order, opts){
   } else {
     actions.push("<button class='ord-btn primary' data-order-repeat='" + order.id + "'>Reencomendar</button>");
   }
-  var title = isAdminView ? escH(order.client || ("Encomenda #" + order.id)) : "Encomenda anterior";
+  var publicNumber = order.publicNumber || order.public_number || ("VLS-" + String(new Date(order.createdAt || Date.now()).getFullYear()) + "-" + String(order.id || 0).padStart(6, "0"));
+  var title = isAdminView ? escH(order.client || publicNumber) : "Encomenda anterior";
   var subtitle = isAdminView
-    ? ("#" + order.id + (order.email ? " &middot; " + escH(order.email) : ""))
-    : ("NIF: " + escH(order.nif || "Sem NIF"));
-  return "<article class='ord-card'>"
-    + "<div class='ord-card-top'>"
-      + "<div class='ord-card-identity'>"
-        + "<div class='ord-title'>" + title + "</div>"
-        + "<div class='ord-sub'>" + subtitle + "</div>"
-        + "<div class='ord-chip-row'>"
-          + "<span class='ord-chip'>" + escH(formatDateTime(order.createdAt, order.date, order.time)) + "</span>"
-          + "<span class='ord-chip'>" + escH(order.units + " un.") + "</span>"
-          + "<span class='ord-chip'>" + escH(order.lines + " linhas") + "</span>"
-        + "</div>"
-      + "</div>"
-      + "<div class='ord-card-total'><small>Total</small>" + formatMoney(order.total) + "</div>"
+    ? (escH(publicNumber) + (order.email ? " &middot; " + escH(order.email) : ""))
+    : (escH(publicNumber) + " &middot; NIF: " + escH(order.nif || "Sem NIF"));
+  return "<div class='ord-card'>"
+    + "<div class='ord-card-head'>"
+      + "<div><div class='ord-title'>" + title + "</div><div class='ord-sub'>" + subtitle + "<br>" + escH(formatDateTime(order.createdAt, order.date, order.time)) + "</div></div>"
+      + "<div class='ord-total'><small>Total</small>" + formatMoney(order.total) + "</div>"
     + "</div>"
+    + "<div class='ord-sub'><span class='ord-badge'>" + order.units + " unidades</span> <span class='ord-badge'>" + order.lines + " linhas</span></div>"
     + "<div class='ord-actions'>" + actions.join("") + "</div>"
-    + "</article>";
+    + "</div>";
 }
 
 function renderOrderDetail(order, isAdminView){
@@ -745,7 +608,7 @@ function renderOrderDetail(order, isAdminView){
       : "<button class='ord-btn primary' data-order-repeat='" + order.id + "'>Reencomendar esta encomenda</button>")
     + "</div>";
   return "<div class='ord-detail'>"
-    + "<div class='ord-detail-head'><div><div class='ord-title'>" + (isAdminView ? escH(order.client || ("Encomenda #" + order.id)) : "Resumo da encomenda") + "</div><div class='ord-sub'>" + (isAdminView ? ("#" + order.id + " &middot; ") : "") + escH(formatDateTime(order.createdAt, order.date, order.time)) + "</div></div><div class='ord-total'><small>Total</small>" + formatMoney(order.total) + "</div></div>"
+    + "<div class='ord-detail-head'><div><div class='ord-title'>" + (isAdminView ? escH(order.client || ("Encomenda #" + order.id)) : "Resumo da encomenda") + "</div><div class='ord-sub'>" + escH(order.publicNumber || order.public_number || ("#" + order.id)) + " &middot; " + escH(formatDateTime(order.createdAt, order.date, order.time)) + "</div></div><div class='ord-total'><small>Total</small>" + formatMoney(order.total) + "</div></div>"
     + "<div class='ord-detail-grid'>"
       + "<div class='ord-detail-box'><strong>Cliente</strong>" + escH(order.client || "") + "</div>"
       + "<div class='ord-detail-box'><strong>NIF</strong>" + escH(order.nif || "Sem NIF") + "</div>"
@@ -759,7 +622,7 @@ function renderOrderDetail(order, isAdminView){
 }
 
 function loadOrderDetail(orderId, isAdminView){
-  var url = isAdminView ? ("/admin/encomendas/" + orderId) : ("/me/encomendas/" + orderId);
+  var url = isAdminView ? (BASE_URL + "/admin/encomendas/" + orderId) : (BASE_URL + "/me/encomendas/" + orderId);
   fetch(url, {
     headers: { "X-Token": authToken||"" }
   })
@@ -783,66 +646,27 @@ function buildUserOrdersSection(){
   if(!USER_ORDERS.length){
     return "<div class='area-empty'>Ainda nao tens encomendas antigas.</div>";
   }
-  return "<div class='user-orders-wrap'>"
-    + buildAdminIntro(
-        "As tuas encomendas",
-        "Vê rapidamente o histórico, abre um detalhe ou volta a repetir um pedido antigo.",
-        ""
-      )
-    + "<div class='area-section'>" + USER_ORDERS.map(function(order){
-      return buildOrderCard(order, { admin:false });
-    }).join("") + "</div>"
-    + "</div>";
+  return "<div class='area-section'>" + USER_ORDERS.map(function(order){
+    return buildOrderCard(order, { admin:false });
+  }).join("") + "</div>";
 }
 
 function buildClientsSection(){
-  var search = (areaSearch || "").toLowerCase();
-  var list = CLIENTS.filter(function(c){
-    if(!search) return true;
-    return [c.name, c.user, c.email, c.nif].join(" ").toLowerCase().indexOf(search) >= 0;
-  });
-  var total = CLIENTS.length;
-  var active = CLIENTS.filter(function(c){ return c.ativo !== false; }).length;
-  var admins = CLIENTS.filter(function(c){ return c.admin; }).length;
-  var orderTotal = CLIENTS.reduce(function(acc, c){ return acc + Number(c.total_encomendas || 0); }, 0);
-    return "<div class='admin-workspace'>"
-      + buildAdminIntro(
-        "Clientes",
-        "Cria, edita e consulta clientes com uma vista mais limpa. O formulário abre num modal para não entupir a lista.",
-        "<button class='abtn-new' id='abtn-new' type='button'>+ Novo Cliente</button>"
-      )
-    + "<div class='admin-kpis'>"
-      + buildStatCard("Clientes", String(total), "Registos na base de dados", "tone-neutral")
-      + buildStatCard("Ativos", String(active), "Com acesso à plataforma", "tone-soft")
-      + buildStatCard("Admins", String(admins), "Contas com permissões", "tone-dark")
-      + buildStatCard("Encomendas", String(orderTotal), "Total acumulado", "tone-gold")
-    + "</div>"
-    + "<section class='admin-panel-card admin-list-column'>"
-      + "<div class='area-toolbar'>"
-        + "<input class='area-search' id='area-search' type='search' placeholder='Pesquisar clientes por nome, utilizador, email ou NIF' value='" + escAttr(areaSearch) + "'>"
-        + "<span class='ord-badge'>" + list.length + " resultado" + (list.length !== 1 ? "s" : "") + "</span>"
-      + "</div>"
-      + (list.length ? "<div class='client-grid'>" + list.map(function(c,i){
-        var index = CLIENTS.indexOf(c);
-        var lastLogin = formatDateTime(c.ultimo_login, "", "");
-        return "<article class='cl-item'>"
-          + "<div class='cl-avatar'>" + escH((c.name || c.user || "?").slice(0,1).toUpperCase()) + "</div>"
-          + "<div class='cl-info'>"
-            + "<div class='cl-name'>" + escH(c.name||c.user) + (c.admin ? " <span class='cl-badge'>ADMIN</span>" : "") + "</div>"
-            + "<div class='cl-meta'>" + escH(c.user) + "</div>"
-            + "<div class='cl-meta'>" + (c.nif ? "NIF " + escH(c.nif) : "Sem NIF") + (c.email ? " · " + escH(c.email) : "") + "</div>"
-            + "<div class='cl-meta'><b>" + (c.total_encomendas || 0) + "</b> encomenda" + ((c.total_encomendas || 0)!==1 ? "s" : "") + " · " + escH(c.ativo !== false ? "Ativo" : "Inativo") + "</div>"
-            + "<div class='cl-meta'><b>Último login:</b> " + escH(lastLogin || "Nunca") + "</div>"
-          + "</div>"
-          + "<div class='cl-item-actions'>"
-            + "<button class='cl-edit' data-ei='" + index + "'>Editar</button>"
-            + "<button class='cl-edit' data-client-orders='" + c.id + "'>Encomendas</button>"
-            + (!c.admin ? "<button class='cl-del' data-di='" + index + "'>&#128465;</button>" : "")
-          + "</div>"
-        + "</article>";
-      }).join("") + "</div>" : "<div class='area-empty'>Ainda não há clientes para mostrar.</div>")
-    + "</section>"
-    + "</div>";
+  return renderForm(editingIdx >= 0 ? CLIENTS[editingIdx] : null) +
+    "<div style='margin-bottom:6px;'>" +
+    CLIENTS.map(function(c,i){
+      return "<div class='cl-item'>"
+        + "<div class='cl-info'>"
+          + "<div class='cl-name'>" + escH(c.name||c.user) + (c.admin ? " <span class='cl-badge'>ADMIN</span>" : "") + "</div>"
+          + "<div class='cl-meta'>&#128100; " + escH(c.user) + (c.nif ? " &nbsp;&#183;&nbsp; NIF: " + escH(c.nif) : "") + (c.email ? " &nbsp;&#183;&nbsp; " + escH(c.email) : "") + "</div>"
+          + "<div class='cl-meta'>" + (c.total_encomendas || 0) + " encomenda" + ((c.total_encomendas || 0)!==1 ? "s" : "") + "</div>"
+        + "</div>"
+        + "<button class='cl-edit' data-ei='" + i + "'>Editar</button>"
+        + "<button class='cl-edit' data-client-orders='" + c.id + "'>Encomendas</button>"
+        + (!c.admin ? "<button class='cl-del' data-di='" + i + "'>&#128465;</button>" : "")
+        + "</div>";
+    }).join("") + "</div>" +
+    (editingIdx < 0 ? "<button class='abtn-new' id='abtn-new'>+ Novo Cliente</button>" : "");
 }
 
 function buildAdminOrdersSection(){
@@ -853,8 +677,6 @@ function buildAdminOrdersSection(){
     return hay.indexOf(areaSearch.toLowerCase()) >= 0;
   });
   var activeClient = filterClientId ? CLIENTS.find(function(c){ return c.id === filterClientId; }) : null;
-  var totalMoney = sumOrderTotal(list);
-  var totalUnits = sumOrderUnits(list);
   var detailHtml = "";
   if(selectedOrderId){
     var match = ADMIN_ORDERS.find(function(order){ return order.id === selectedOrderId; });
@@ -862,27 +684,12 @@ function buildAdminOrdersSection(){
       detailHtml = "<div class='ord-detail-box'><strong>Encomenda selecionada</strong>Clica em <b>Ver detalhe</b> para abrir toda a informação da encomenda #" + match.id + ".</div>";
     }
   }
-  return "<div class='admin-workspace'>"
-    + buildAdminIntro(
-        "Encomendas",
-        "Consulta, filtra e abre encomendas com uma vista mais limpa. Mantivemos tudo rápido, mas com menos ruído visual.",
-        activeClient ? "<span class='ord-badge'>Cliente ativo: " + escH(activeClient.name || activeClient.user) + "</span>" : ""
-      )
-    + "<div class='admin-kpis'>"
-      + buildStatCard("Encomendas", String(list.length), "Visíveis no filtro atual", "tone-neutral")
-      + buildStatCard("Unidades", String(totalUnits), "Quantidade total", "tone-soft")
-      + buildStatCard("Total", formatMoney(totalMoney), "Valor acumulado", "tone-gold")
-      + buildStatCard("Clientes", String(CLIENTS.length), "Base de clientes", "tone-dark")
+  return "<div class='area-toolbar'>"
+    + "<input class='area-search' id='area-search' type='search' placeholder='Pesquisar encomendas por cliente, NIF ou email' value='" + escAttr(areaSearch) + "'>"
+    + (activeClient ? "<span class='ord-badge'>Cliente: " + escH(activeClient.name || activeClient.user) + "</span>" : "")
     + "</div>"
-    + "<div class='admin-panel-card'>"
-      + "<div class='area-toolbar'>"
-        + "<input class='area-search' id='area-search' type='search' placeholder='Pesquisar encomendas por cliente, NIF ou email' value='" + escAttr(areaSearch) + "'>"
-        + "<span class='ord-badge'>" + list.length + " resultado" + (list.length !== 1 ? "s" : "") + "</span>"
-      + "</div>"
-      + detailHtml
-      + (list.length ? "<div class='area-section'>" + list.map(function(order){ return buildOrderCard(order, { admin:true }); }).join("") + "</div>" : "<div class='area-empty'>Nao encontramos encomendas com esse filtro.</div>")
-    + "</div>"
-    + "</div>";
+    + detailHtml
+    + (list.length ? "<div class='area-section'>" + list.map(function(order){ return buildOrderCard(order, { admin:true }); }).join("") + "</div>" : "<div class='area-empty'>Nao encontramos encomendas com esse filtro.</div>");
 }
 
 function buildAdminExtraSection(){
@@ -916,7 +723,7 @@ function renderAdminPanel(){
 }
 
 function renderUserOrders(){
-  fetch("/me/encomendas", {
+  fetch(BASE_URL + "/me/encomendas", {
     headers: { "X-Token": authToken||"" }
   })
   .then(function(r){ return r.json(); })
@@ -935,7 +742,7 @@ function renderUserOrders(){
 
 function renderAdminClients(){
   var body = document.getElementById("abody");
-  fetch("/admin/clientes", {
+  fetch(BASE_URL+"/admin/clientes", {
     headers: {"X-Token": authToken||""}
   })
   .then(function(r){ return r.json(); })
@@ -944,7 +751,7 @@ function renderAdminClients(){
     CLIENTS = res.clientes.map(function(c){
       return {user:c.user,pass:c.pass,name:c.nome,nif:c.nif,admin:!!c.admin,id:c.id,
               ativo:c.activo !== false,email:c.email||'',telefone:c.telefone||'',
-              total_encomendas:c.total_encomendas||0,ultimo_login:c.ultimo_login||null};
+              total_encomendas:c.total_encomendas||0};
     });
     body.innerHTML = areaTabsMarkup(true) + buildClientsSection();
     bindAreaPanelEvents();
@@ -958,10 +765,10 @@ function renderAdminClients(){
 function renderAdminOrders(){
   var body = document.getElementById("abody");
   Promise.all([
-    fetch("/admin/encomendas", {
+    fetch(BASE_URL + "/admin/encomendas", {
       headers: { "X-Token": authToken||"" }
     }).then(function(r){ return r.json(); }),
-    fetch("/admin/clientes", {
+    fetch(BASE_URL + "/admin/clientes", {
       headers: { "X-Token": authToken||"" }
     }).then(function(r){ return r.json(); }).catch(function(){ return { ok:false, clientes:[] }; })
   ])
@@ -974,7 +781,7 @@ function renderAdminOrders(){
       CLIENTS = clientsRes.clientes.map(function(c){
         return {user:c.user,pass:c.pass,name:c.nome,nif:c.nif,admin:!!c.admin,id:c.id,
                 ativo:c.activo !== false,email:c.email||'',telefone:c.telefone||'',
-                total_encomendas:c.total_encomendas||0,ultimo_login:c.ultimo_login||null};
+                total_encomendas:c.total_encomendas||0};
       });
     }
     body.innerHTML = areaTabsMarkup(true) + buildAdminExtraSection();
@@ -994,7 +801,7 @@ function deleteAdminOrder(orderId){
     danger: true
   }).then(function(ok){
     if(!ok) return;
-    fetch("/admin/encomendas/" + orderId, {
+    fetch(BASE_URL + "/admin/encomendas/" + orderId, {
       method: "DELETE",
       headers: { "X-Token": authToken||"" }
     })
@@ -1015,15 +822,12 @@ function fillCartFromOrder(order){
   if(!order || !Array.isArray(order.items)) return;
   cart = order.items.map(function(item){
     var prod = PRODS[item.ref] || {};
-    var cor = normalizeChoiceText(item.cor);
-    var tam = normalizeChoiceText(item.tam);
     return {
-      key: cartItemKey(item.ref, cor, tam),
       ref: item.ref,
       name: item.name,
       type: item.type || prod.type || "",
-      cor: cor,
-      tam: tam,
+      cor: item.cor,
+      tam: item.tam,
       qty: Number(item.qty || 0),
       price: Number(item.price || 0),
       img: prod.img || IMGS[item.ref] || ""
@@ -1031,13 +835,13 @@ function fillCartFromOrder(order){
   });
   renderCart();
   cart.forEach(function(item){ updateBadge(item.ref); });
-  if(typeof saveCartState === "function") saveCartState();
+  scheduleCartSync();
   closeAdmin();
   openCartPanel();
 }
 
 function repeatOrder(orderId){
-  fetch("/me/encomendas/" + orderId + "/reencomendar", {
+  fetch(BASE_URL + "/me/encomendas/" + orderId + "/reencomendar", {
     method: "POST",
     headers: { "X-Token": authToken||"" }
   })
@@ -1054,7 +858,9 @@ function repeatOrder(orderId){
 function downloadOrderPdf(orderId, mode){
   mode = mode || "normal";
   var suffix = mode === "sem_precos" ? "_sem_precos" : "";
-  var url = "/encomendas/" + orderId + "/pdf" + (mode === "sem_precos" ? "?mode=sem_precos" : "");
+  var url = BASE_URL + "/encomendas/" + orderId + "/pdf" + (mode === "sem_precos" ? "?mode=sem_precos" : "");
+  var order = (ADMIN_ORDERS || []).find(function(item){ return item.id === orderId; }) || (USER_ORDERS || []).find(function(item){ return item.id === orderId; }) || {};
+  var publicNumber = order.publicNumber || order.public_number || ("VLS-" + String(new Date(order.createdAt || Date.now()).getFullYear()) + "-" + String(orderId || 0).padStart(6, "0"));
   fetch(url, {
     headers: { "X-Token": authToken||"" }
   })
@@ -1066,7 +872,7 @@ function downloadOrderPdf(orderId, mode){
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "encomenda_" + orderId + suffix + ".pdf";
+    a.download = publicNumber + suffix + ".pdf";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -1124,7 +930,8 @@ function bindAreaPanelEvents(){
     }
     var editClientBtn = e.target.closest("[data-ei]");
     if(editClientBtn){
-      openClientModal(parseInt(editClientBtn.getAttribute("data-ei"), 10));
+      editingIdx = parseInt(editClientBtn.getAttribute("data-ei"), 10);
+      renderAdminPanel();
       return;
     }
     var deleteClientBtn = e.target.closest("[data-di]");
@@ -1144,24 +951,18 @@ function bindAreaPanelEvents(){
       return;
     }
     if(e.target && e.target.id === "abtn-new"){
-      openClientModal(-2);
+      editingIdx = -2;
+      renderAdminPanel();
       return;
     }
     if(e.target && e.target.id === "afrm-cancel"){
-      closeClientModal();
+      editingIdx = -1;
+      renderAdminPanel();
       return;
     }
     if(e.target && e.target.id === "afrm-save"){
       e.preventDefault();
       saveClientForm();
-      return;
-    }
-    if(e.target && e.target.id === "client-modal-close"){
-      closeClientModal();
-      return;
-    }
-    if(e.target && e.target.id === "client-modal-bg"){
-      closeClientModal();
       return;
     }
   });
@@ -1171,12 +972,6 @@ function bindAreaPanelEvents(){
       document.getElementById("abody").innerHTML = areaTabsMarkup(true) + buildAdminExtraSection();
       bindAreaPanelEvents();
       return;
-    }
-  });
-
-  document.addEventListener("keydown", function(e){
-    if(e.key === "Escape"){
-      closeClientModal();
     }
   });
 }

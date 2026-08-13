@@ -63,11 +63,6 @@ function setDeveloperMode(active){
   }, 0);
 }
 
-function finishAuthCheck(){
-  document.documentElement.classList.remove("auth-checking");
-  document.body.classList.remove("auth-checking");
-}
-
 function updateStickyOffsets(){
   var hdr = document.querySelector(".hdr");
   var srch = document.querySelector(".srch-wrap");
@@ -81,138 +76,34 @@ function updateStickyOffsets(){
 }
 
 function setMobileCompact(next){
-  mobileCompact = false;
-  document.body.classList.remove("mobile-ui-compact");
+  next = !!next;
+  if(window.innerWidth > 640) next = false;
+  if(document.body.classList.contains("login-active")) next = false;
+  if(mobileCompact === next) return;
+  mobileCompact = next;
+  document.body.classList.toggle("mobile-ui-compact", mobileCompact);
   setTimeout(updateStickyOffsets, 0);
 }
 
 function syncMobileCompactState(){
-  setMobileCompact(false);
+  if(window.innerWidth > 640 || document.body.classList.contains("login-active")){
+    setMobileCompact(false);
+    return;
+  }
+  var sentinel = document.getElementById("mobile-header-sentinel");
+  var threshold = sentinel ? Math.max(24, sentinel.offsetTop) : 80;
+  setMobileCompact((window.scrollY || 0) > threshold);
 }
 
 function handleMobileChromeScroll(){
-  return;
-}
-
-function clearAuthenticatedState(){
-  loggedClient = null;
-  authToken = null;
-  ADMIN_NOTIFICATIONS = [];
-  DEV_SUMMARY = null;
-  DEV_STATUS_DATA = null;
-  DEV_NOTES = [];
-  DEV_ALL_LOGINS = [];
-  DEV_LOGIN_LOGS = [];
-  DEV_RECENT_ORDERS = [];
-}
-
-function applyAuthenticatedState(client){
-  loggedClient = client;
-  if(client && client.token) authToken = client.token;
-  var loginScreen = document.getElementById("login-screen");
-  if(loginScreen) loginScreen.style.display="none";
-  if(typeof setLoginScreenActive === "function") setLoginScreenActive(false);
-  finishAuthCheck();
-  if(typeof setDeveloperMode === "function") setDeveloperMode(!!(client && client.developer));
-  var n = client && (client.name || client.nome || "");
-  if(n){
-    var cname = document.getElementById("cname");
-    if(cname) cname.value = n;
-  }
-  if(client && client.nif){
-    var cnif = document.getElementById("cnif");
-    if(cnif) cnif.value = client.nif;
-  }
-  if(typeof updateAreaButton === "function") updateAreaButton();
-  if(typeof updateUserGreeting === "function") updateUserGreeting();
-  if(client && client.admin && !client.developer){
-    var adminSettingsBtn = document.getElementById("admin-settings-btn");
-    var newProdBtn = document.getElementById("new-prod-btn");
-    if(adminSettingsBtn) adminSettingsBtn.classList.add("on");
-    if(newProdBtn) newProdBtn.classList.add("on");
-    if(typeof enableAdminProductEdit === "function") enableAdminProductEdit();
-    if(typeof loadAdminNotifications === "function") loadAdminNotifications();
-  } else {
-    ADMIN_NOTIFICATIONS = [];
-    if(typeof updateNotificationButton === "function") updateNotificationButton();
-  }
-  var logoutBtn = document.getElementById("logout-btn");
-  if(logoutBtn) logoutBtn.classList.add("on");
-  var initialView = String(window.VILLAS_INITIAL_VIEW || "").toLowerCase();
-  if(client && client.developer && typeof openDeveloperDashboard === "function"){
-    openDeveloperDashboard();
-  } else if(client && (client.admin || client.developer) && initialView === "admin" && typeof openAdmin === "function"){
-    setTimeout(function(){
-      openAdmin();
-    }, 0);
-  }
-  setTimeout(function(){
-    if(typeof updateStickyOffsets === "function") updateStickyOffsets();
-    if(typeof syncMobileCompactState === "function") syncMobileCompactState();
-  }, 0);
-  if(typeof ensureCatalogReadyOnStartup === "function"){
-    ensureCatalogReadyOnStartup();
-  }
-  if(typeof syncCartFromServer === "function"){
-    syncCartFromServer().catch(function(){ return false; });
-  }
-}
-
-function shouldAutoBootstrapSession(){
-  return String(window.VILLAS_INITIAL_VIEW || "catalog").toLowerCase() !== "login";
-}
-
-function bootstrapSessionFromServer(){
-  return fetch("/me", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { "X-Token": authToken || "" }
-  })
-  .then(function(r){
-    return r.text().then(function(text){
-      var res = {};
-      try{ res = text ? JSON.parse(text) : {}; }catch(e){}
-      if(!r.ok || !res.ok) return false;
-      applyAuthenticatedState({
-        user: res.user || res.nome || "",
-        name: res.nome,
-        nif: res.nif,
-        email: res.email || "",
-        telefone: res.telefone || "",
-        admin: !!res.admin,
-        developer: !!res.developer,
-        id: res.id,
-        token: res.token || ""
-      });
-      return true;
-    });
-  })
-  .catch(function(){ return false; })
-  .then(function(ok){
-    if(ok) return true;
-    clearAuthenticatedState();
-    var errBox = document.getElementById("login-err");
-    if(errBox) errBox.classList.remove("on");
-    if(typeof updateUserGreeting === "function") updateUserGreeting();
-    if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
-    finishAuthCheck();
-    if(typeof setMobileCompact === "function") setMobileCompact(false);
-    if(typeof ensureCatalogReadyOnStartup === "function") ensureCatalogReadyOnStartup();
-    var loginUser = document.getElementById("l-user");
-    if(loginUser) loginUser.focus();
-    return false;
+  if(mobileScrollTicking) return;
+  mobileScrollTicking = true;
+  window.requestAnimationFrame(function(){
+    mobileScrollTicking = false;
+    syncMobileCompactState();
   });
 }
 
-function logoutSessionOnServer(){
-  return fetch("/logout", {
-    method: "POST",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { "X-Token": authToken || "" }
-  }).catch(function(){ return false; });
-}
 
 function doLogin(){
   var u = document.getElementById("l-user").value.trim().toLowerCase();
@@ -220,92 +111,85 @@ function doLogin(){
   var err = document.getElementById("login-err");
   var box = document.getElementById("login-box");
   var btn = document.getElementById("login-btn");
-  var loginUrls = [];
-  var base = (typeof BASE_URL === "string" && BASE_URL) ? BASE_URL.replace(/\/$/, "") : "";
-  if(base) loginUrls.push(base + "/login");
-  loginUrls.push("/login");
-  if(window.location && window.location.origin && window.location.origin !== "null" && window.location.protocol !== "file:"){
-    loginUrls.push(window.location.origin.replace(/\/$/, "") + "/login");
-  }
-  loginUrls.push("https://villas.mlabcorp.net/login");
-  loginUrls = loginUrls.filter(function(url, idx, arr){ return !!url && arr.indexOf(url) === idx; });
 
   if(!u || !p){ err.textContent="Preenche o utilizador e a password."; err.classList.add("on"); return; }
 
   btn.disabled = true; btn.textContent = "A entrar...";
   err.classList.remove("on");
 
-  (function tryLogin(index){
-    if(index >= loginUrls.length){
-      loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
-      return;
-    }
-    fetch(loginUrls[index], {
-      method: "POST",
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: u, pass: p })
-    })
-    .then(function(r){
-      return r.text().then(function(text){
-        var res = {};
-        try{ res = text ? JSON.parse(text) : {}; }catch(e){}
-        if(!r.ok || !res.ok){
-          if(index + 1 < loginUrls.length) return tryLogin(index + 1);
-          loginFail(err, box, btn, (res && res.message) || "Utilizador ou password incorrectos");
-          return;
-        }
-        authToken = res.token||"";
-        loginSuccess({
-          user:u,
-          name:res.nome,
-          nif:res.nif,
-          email: res.email || "",
-          telefone: res.telefone || "",
-          admin:res.admin,
-          developer:res.developer,
-          id:res.id,
-          token:res.token
-        });
+  fetch(SERVER_URL.replace("/encomenda","/login"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user: u, pass: p })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    if(res.ok){
+      authToken = res.token||"";
+      loginSuccess({
+        user:u,
+        name:res.nome,
+        nif:res.nif,
+        email: res.email || "",
+        telefone: res.telefone || "",
+        admin:res.admin,
+        developer:res.developer,
+        id:res.id,
+        token:res.token
       });
-    })
-    .catch(function(){
-      if(index + 1 < loginUrls.length) return tryLogin(index + 1);
-      loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
-    });
-  })(0);
+    } else {
+      loginFail(err, box, btn, res.message||"Utilizador ou password incorrectos");
+    }
+  })
+  .catch(function(){
+    loginFail(err, box, btn, "Nao foi possivel ligar ao servidor.");
+  });
 }
 
 function loginSuccess(client){
-  var btn = document.getElementById("login-btn");
+  loggedClient = client;
+  if(client.token) authToken = client.token;
   try{
-    applyAuthenticatedState(client);
+    var expiresAt = Date.now() + SESSION_TTL_MS;
+    sessionStorage.setItem("villas_token", authToken||"");
+    sessionStorage.setItem("villas_client", JSON.stringify(client));
+    localStorage.setItem("villas_token", authToken||"");
+    localStorage.setItem("villas_client", JSON.stringify(client));
+    localStorage.setItem("villas_session_expires", String(expiresAt));
   }catch(e){}
-  try{
-    // UI updates handled in applyAuthenticatedState.
-    var nextPath = (client && (client.admin || client.developer)) ? "/admin" : "/catalogo";
-    if(window.location && window.location.pathname !== nextPath){
-      window.location.replace(nextPath);
-      return;
-    }
-  } catch (err) {
-    console.error("Login success flow failed:", err);
-    clearAuthenticatedState();
-    var errBox = document.getElementById("login-err");
-    if(errBox){
-      errBox.textContent = "Login aceite, mas houve um erro ao abrir a área. Atualiza a página e tenta de novo.";
-      errBox.classList.add("on");
-    }
-    var loginScreen2 = document.getElementById("login-screen");
-    if(loginScreen2) loginScreen2.style.display = "";
-    if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
-    finishAuthCheck();
-  } finally {
-    if(btn){
-      btn.disabled = false;
-      btn.textContent = "Entrar";
-    }
+  document.getElementById("login-screen").style.display="none";
+  setLoginScreenActive(false);
+  setDeveloperMode(!!client.developer);
+  var n = client.name||client.nome||"";
+  if(n) document.getElementById("cname").value = n;
+  if(client.nif) document.getElementById("cnif").value = client.nif;
+  updateAreaButton();
+  updateUserGreeting();
+  if(client.admin && !client.developer){
+    document.getElementById("admin-settings-btn").classList.add("on");
+    document.getElementById("new-prod-btn").classList.add("on");
+    enableAdminProductEdit();
+    loadAdminNotifications();
+  } else {
+    ADMIN_NOTIFICATIONS = [];
+    updateNotificationButton();
+  }
+  document.getElementById("logout-btn").classList.add("on");
+  clearOrderRequestId();
+  if(client.developer){
+    openDeveloperDashboard();
+  }
+  var btn = document.getElementById("login-btn");
+  btn.disabled = false; btn.textContent = "Entrar";
+  if(typeof loadCartFromServer === "function"){
+    setTimeout(function(){ loadCartFromServer(); }, 0);
+  }
+  setTimeout(function(){
+    updateStickyOffsets();
+    syncMobileCompactState();
+  }, 0);
+  if(typeof ensureCatalogReadyOnStartup === "function"){
+    ensureCatalogReadyOnStartup();
   }
 }
 
@@ -325,13 +209,4 @@ document.getElementById("l-pass").addEventListener("keydown", function(e){
 document.getElementById("l-user").addEventListener("keydown", function(e){
   if(e.key==="Enter") document.getElementById("l-pass").focus();
 });
-
-setTimeout(function(){
-  if(typeof bootstrapSessionFromServer === "function" && shouldAutoBootstrapSession()){
-    bootstrapSessionFromServer().catch(function(){ return false; });
-    return;
-  }
-  if(typeof setLoginScreenActive === "function") setLoginScreenActive(true);
-  finishAuthCheck();
-}, 50);
 
