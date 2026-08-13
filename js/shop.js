@@ -404,14 +404,14 @@ function changeQty(ref,d){
   var next = cur + (d * step);
   qi.value = Math.max(min, next);
 }
-function addToCart(ref){
+function addToCart(ref, corOverride, tamOverride, qtyOverride){
   var p = PRODS[ref]; if(!p || p.active === false) return;
   var live = readLiveProductSelection(ref);
-  var cor = normalizeChoiceText(live.cor);
-  var tam = normalizeChoiceText(live.tam);
+  var cor = normalizeChoiceText(corOverride != null ? corOverride : live.cor);
+  var tam = normalizeChoiceText(tamOverride != null ? tamOverride : live.tam);
   var qtyInput = document.getElementById("qty_"+ref);
-  var qty = normalizeQtyValue(ref, live.qty);
-  qtyInput.value = qty;
+  var qty = normalizeQtyValue(ref, qtyOverride != null ? qtyOverride : live.qty);
+  if(qtyInput) qtyInput.value = qty;
   var ex = null;
   var key = [ref, cor, tam].join("|");
   for(var i=0;i<cart.length;i++){ if(cart[i].key===key || (cart[i].ref===ref&&cart[i].cor===cor&&cart[i].tam===tam)){ex=cart[i];break;} }
