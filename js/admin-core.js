@@ -118,6 +118,7 @@ function initAdminUiBindings(){
   var peditCancel = document.getElementById("pedit-cancel");
   var peditHeadClose = document.getElementById("pedit-head-close");
   var peditBg = document.getElementById("pedit-bg");
+  var peditBox = peditBg ? peditBg.querySelector(".pedit-box") : null;
   var peditImg = document.getElementById("pedit-img");
   var peditFile = document.getElementById("pedit-img-file");
   var peditImageCard = document.getElementById("pedit-image-card");
@@ -204,14 +205,13 @@ function initAdminUiBindings(){
     if(!deleteBtn) return;
     deleteCategoryFromSettings(deleteBtn.getAttribute("data-cat-delete"));
   });
-  if(peditCancel) peditCancel.addEventListener("click", function(){
-    document.getElementById("pedit-bg").classList.remove("on");
-  });
-  if(peditHeadClose) peditHeadClose.addEventListener("click", function(){
-    document.getElementById("pedit-bg").classList.remove("on");
-  });
+  if(peditCancel) peditCancel.addEventListener("click", function(){ closeProductEditor(); });
+  if(peditHeadClose) peditHeadClose.addEventListener("click", function(){ closeProductEditor(); });
   if(peditBg) peditBg.addEventListener("click", function(e){
-    if(e.target===this) this.classList.remove("on");
+    if(e.target===this) closeProductEditor();
+  });
+  if(peditBox) peditBox.addEventListener("click", function(e){
+    e.stopPropagation();
   });
   if(peditImg) peditImg.addEventListener("input", function(){
     var v = this.value.trim();
@@ -282,7 +282,12 @@ function initAdminUiBindings(){
     closeCartPanel();
     closeNotifications();
     if(document.getElementById("settings-bg")) closeAdminSettings();
-    if(document.getElementById("pedit-bg")) document.getElementById("pedit-bg").classList.remove("on");
+    closeProductEditor();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "Escape") return;
+    var peditOn = document.getElementById("pedit-bg") && document.getElementById("pedit-bg").classList.contains("on");
+    if(peditOn) closeProductEditor();
   });
 }
 

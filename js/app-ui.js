@@ -123,6 +123,7 @@ function openAdminSettings(){
   if(!loggedClient || !loggedClient.admin) return;
   setCategoryStatus("", "");
   setSmtpFeedback("", "");
+  if(typeof setSettingsTab === "function") setSettingsTab("collection");
   reloadCategoriesFromServer()
     .then(function(updated){
       if(updated) refreshCatalogUi();
@@ -136,6 +137,17 @@ function openAdminSettings(){
 }
 function closeAdminSettings(){
   document.getElementById("settings-bg").classList.remove("on");
+}
+function setSettingsTab(tabName){
+  tabName = String(tabName || "collection");
+  var tabs = document.querySelectorAll(".set-tab[data-set-tab]");
+  var panels = document.querySelectorAll(".set-panel[data-set-panel]");
+  tabs.forEach(function(tab){
+    tab.classList.toggle("on", tab.getAttribute("data-set-tab") === tabName);
+  });
+  panels.forEach(function(panel){
+    panel.classList.toggle("on", panel.getAttribute("data-set-panel") === tabName);
+  });
 }
 function setCategoryStatus(msg, kind){
   var el = document.getElementById("category-status");

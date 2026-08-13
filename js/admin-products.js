@@ -58,6 +58,11 @@ function fillProductForm(prod, img, showModified){
     else resetBtn.textContent = "↻ Repor Guardado";
   }
 }
+function closeProductEditor(){
+  var bg = document.getElementById("pedit-bg");
+  if(bg) bg.classList.remove("on");
+  editingRef = "";
+}
 function openProductEdit(ref){
   var p = PRODS[ref]; if(!p) return;
   editingRef = ref;
@@ -103,8 +108,7 @@ function buildProductPayload(){
 }
 function syncProductEditorAfterSave(targetCat, successMessage){
   if(targetCat) activeCat = targetCat;
-  editingRef = "";
-  document.getElementById("pedit-bg").classList.remove("on");
+  closeProductEditor();
   return refreshCatalogUiFromServer(successMessage || "Produto atualizado com sucesso.");
 }
 function saveProductEdit(){
@@ -162,7 +166,7 @@ function duplicateProductEdit(){
 }
 function deleteProductEdit(){
   if(!editingRef || editingRef === "__new__") {
-    document.getElementById("pedit-bg").classList.remove("on");
+    closeProductEditor();
     return;
   }
   askConfirm({
@@ -254,7 +258,7 @@ function enableAdminProductEdit(){
 var lastTouchEndAt = 0;
 document.addEventListener("touchend", function(e){
   var target = e.target;
-  var isField = target && (target.closest("input, textarea, select, label") || target.isContentEditable);
+  var isField = target && (target.closest("input, textarea, select, label, button, a, [role='button']") || target.isContentEditable);
   if(isField) return;
   var now = Date.now();
   if(now - lastTouchEndAt < 320){
