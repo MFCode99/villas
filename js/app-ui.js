@@ -54,6 +54,9 @@ setTimeout(function(){
       }
       document.getElementById("logout-btn").classList.add("on");
       clearOrderRequestId();
+      if(typeof loadCartBackup === "function"){
+        loadCartBackup();
+      }
       if(typeof loadCartFromServer === "function"){
         loadCartFromServer();
       }
@@ -108,6 +111,7 @@ function doLogout(){
   cart = [];
   cartRevision = 0;
   clearOrderRequestId();
+  if(typeof clearCartBackup === "function") clearCartBackup();
   if(typeof renderCart === "function") renderCart();
   clearStoredSession();
   closeNotifications();

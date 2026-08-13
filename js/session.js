@@ -176,6 +176,9 @@ function loginSuccess(client){
   }
   document.getElementById("logout-btn").classList.add("on");
   clearOrderRequestId();
+  if(typeof loadCartBackup === "function"){
+    loadCartBackup();
+  }
   if(client.developer){
     openDeveloperDashboard();
   }
