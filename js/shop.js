@@ -605,6 +605,8 @@ function toggleCartPanel(){
   if(document.getElementById("panel").classList.contains("on")) closeCartPanel();
   else openCartPanel();
 }
+window.closeCartPanel = closeCartPanel;
+window.toggleCartPanel = toggleCartPanel;
 document.getElementById("cart-btn").addEventListener("click",function(e){ e.preventDefault(); toggleCartPanel(); });
 document.getElementById("ph-x").addEventListener("click",function(e){ e.preventDefault(); closeCartPanel(); });
 document.getElementById("product-view-close").addEventListener("click", closeProductViewer);
