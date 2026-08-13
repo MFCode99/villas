@@ -171,6 +171,21 @@ function setSmtpStatusCard(status){
   title.textContent = ready ? "Ligação pronta" : "Ligação com aviso";
   text.textContent = status && status.message ? status.message : "Ainda sem estado disponível.";
 }
+function openSmtpHelp(){
+  var message = [
+    "Para usar o email da app:",
+    "1) Ativa a verificação em 2 passos na conta Google.",
+    "2) Cria uma app password para esta aplicação.",
+    "3) Cola essa password no campo Password / app password.",
+    "",
+    "Se precisares dos links oficiais, vou abrir agora."
+  ].join("\n");
+  try{
+    window.open("https://support.google.com/accounts/answer/185833", "_blank", "noopener");
+    window.open("https://myaccount.google.com/security", "_blank", "noopener");
+  }catch(e){}
+  alert(message);
+}
 function fillSmtpSettings(config, status){
   var from = document.getElementById("smtp-email-from");
   var to = document.getElementById("smtp-email-to");

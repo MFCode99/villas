@@ -168,8 +168,8 @@ function initAdminUiBindings(){
     if(file) importCatalogData(file);
     this.value = "";
   });
-  if(smtpHelp) smtpHelp.addEventListener("click", openSmtpHelp);
-  if(smtpSave) smtpSave.addEventListener("click", saveAdminEmailSettings);
+  if(smtpHelp && typeof openSmtpHelp === "function") smtpHelp.addEventListener("click", openSmtpHelp);
+  if(smtpSave && typeof saveAdminEmailSettings === "function") smtpSave.addEventListener("click", saveAdminEmailSettings);
   [smtpFrom, smtpTo, smtpPass].forEach(function(field){
     if(!field) return;
     field.addEventListener("keydown", function(e){

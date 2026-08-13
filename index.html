@@ -275,8 +275,8 @@
             </div>
           </div>
           <div class="smtp-actions">
-            <button class="set-action smtp-help" id="smtp-help" type="button">Como criar senha</button>
-            <button class="set-action smtp-save" id="smtp-save" type="button">Guardar Email</button>
+            <button class="set-action smtp-help" id="smtp-help" type="button" onclick="openSmtpHelp(); return false;">Como criar senha</button>
+            <button class="set-action smtp-save" id="smtp-save" type="button" onclick="saveAdminEmailSettings(); return false;">Guardar Email</button>
           </div>
           <div class="smtp-feedback" id="smtp-feedback"></div>
         </div>
@@ -429,7 +429,7 @@
         <span class="pedit-kicker">Gest&atilde;o de cat&aacute;logo</span>
         <h3 id="pedit-title">Editar Produto</h3>
       </div>
-      <button class="pedit-head-close" id="pedit-head-close" type="button" aria-label="Fechar">&#10005;</button>
+      <button class="pedit-head-close" id="pedit-head-close" type="button" aria-label="Fechar" onclick="closeProductEditor(); return false;">&#10005;</button>
     </div>
     <div id="pedit-modified" class="pedit-modified" style="display:none">&#9998; Este produto tem altera&ccedil;&otilde;es</div>
     <div class="pedit-layout">
@@ -509,7 +509,7 @@
       </div>
     </div>
     <div class="pedit-btns">
-      <button class="pedit-cancel" id="pedit-cancel">Cancelar</button>
+      <button class="pedit-cancel" id="pedit-cancel" type="button" onclick="closeProductEditor(); return false;">Cancelar</button>
       <button class="pedit-duplicate" id="pedit-duplicate">Duplicar</button>
       <button class="pedit-delete" id="pedit-delete">Apagar</button>
       <button class="pedit-reset" id="pedit-reset">&#8635; Repor Original</button>

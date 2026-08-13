@@ -147,7 +147,7 @@
   .pedit-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:4px;position:sticky;top:0;z-index:2;background:linear-gradient(180deg,#fbf8f2 0%,rgba(251,248,242,.96) 80%,rgba(251,248,242,0) 100%);}
   .pedit-kicker{display:block;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:4px;}
   .pedit-box h3{font-family:"Playfair Display",serif;font-size:22px;margin:0;color:var(--ink);}
-  .pedit-head-close,.set-head-close{width:40px;height:40px;border-radius:12px;border:1px solid var(--brd);background:#fff;color:var(--ink);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(0,0,0,.03);flex:0 0 auto;}
+  .pedit-head-close,.set-head-close{position:relative;z-index:5;pointer-events:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--brd);background:#fff;color:var(--ink);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(0,0,0,.03);flex:0 0 auto;}
   .pedit-head-close:hover,.set-head-close:hover{background:#fffdf5;border-color:rgba(138,129,118,.45);}
   .pedit-layout{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:0;flex:1;overflow:auto;border:1px solid var(--brd);border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.03);}
   .pedit-media{padding:22px;background:#fff;border-right:1px solid var(--brd);display:flex;flex-direction:column;gap:12px;}
@@ -170,7 +170,7 @@
   .pedit-duplicate:hover{border-color:var(--gold);background:#fffdf5;}
   .pedit-delete{padding:11px 16px;background:#fff4f2;border:1px solid #f3b0a6;color:#b93a2d;border-radius:999px;font-family:"DM Sans",sans-serif;font-size:13px;cursor:pointer;min-height:42px;}
   .pedit-delete:hover{background:#fee7e2;}
-  .pedit-cancel{padding:11px 16px;background:none;border:1px solid var(--brd);color:var(--muted);
+  .pedit-cancel{position:relative;z-index:5;pointer-events:auto;padding:11px 16px;background:none;border:1px solid var(--brd);color:var(--muted);
     border-radius:999px;font-family:"DM Sans",sans-serif;font-size:13px;cursor:pointer;min-height:42px;}
   .pedit-cancel:hover{color:var(--ink);}
   .pedit-image-card{position:relative;min-height:300px;border:1px dashed rgba(122,115,105,.42);border-radius:12px;background:#fbf8f2;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:all .18s;}

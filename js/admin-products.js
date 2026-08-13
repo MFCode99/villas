@@ -63,6 +63,7 @@ function closeProductEditor(){
   if(bg) bg.classList.remove("on");
   editingRef = "";
 }
+window.closeProductEditor = closeProductEditor;
 function openProductEdit(ref){
   var p = PRODS[ref]; if(!p) return;
   editingRef = ref;
