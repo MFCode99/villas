@@ -519,6 +519,11 @@
 </div>
 
 
+<script>
+  window.normalizeChoiceText = window.normalizeChoiceText || function(value){
+    return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+  };
+</script>
 <script src="js/utils.js?v=20260814-01"></script>
 <script src="js/catalog-data.js?v=20260814-01"></script>
 <script src="js/shop.js?v=20260814-01"></script>

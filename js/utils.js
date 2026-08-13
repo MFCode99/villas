@@ -5,5 +5,6 @@ function escAttr(s){ return String(s || '').replace(/&/g, '&amp;').replace(/"/g,
 function normalizeChoiceText(value){
   return String(value || "").trim().replace(/\s+/g, " ");
 }
+window.normalizeChoiceText = window.normalizeChoiceText || normalizeChoiceText;
 
 function clearLegacyVillasStateIfNeeded(){}
