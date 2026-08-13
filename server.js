@@ -87,6 +87,7 @@ applyRuntimeEmailConfig();
 
 // â”€â”€ BASE DE DADOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let db;
+let cartStateClientColumn = 'client_id';
 async function connectDB() {
   db = await mysql.createPool({ ...CONFIG.db, waitForConnections: true, connectionLimit: 10 });
   await ensureSchemaFixes();
@@ -249,6 +250,23 @@ async function ensureSchemaFixes() {
     if (!seasonColRows.length) {
       await db.execute(`ALTER TABLE produtos ADD COLUMN estacao VARCHAR(20) DEFAULT 'ambos'`);
     }
+    const [cartColRows] = await db.execute(
+      `SELECT COLUMN_NAME
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ?
+         AND TABLE_NAME = 'cart_states'
+         AND COLUMN_NAME IN ('client_id','cliente_id')`,
+      [CONFIG.db.database]
+    );
+    const cartCols = cartColRows.map((row) => row.COLUMN_NAME);
+    if (cartCols.includes('client_id')) {
+      cartStateClientColumn = 'client_id';
+    } else if (cartCols.includes('cliente_id')) {
+      cartStateClientColumn = 'cliente_id';
+    } else {
+      cartStateClientColumn = 'client_id';
+      await db.execute(`ALTER TABLE cart_states ADD COLUMN client_id INT PRIMARY KEY`);
+    }
     const [devColRows] = await db.execute(
       `SELECT COLUMN_NAME
        FROM information_schema.COLUMNS
@@ -260,7 +278,7 @@ async function ensureSchemaFixes() {
     if (!devColRows.length) {
       await db.execute(`ALTER TABLE clientes ADD COLUMN developer TINYINT(1) DEFAULT 0`);
     }
-    const [cartCols] = await db.execute(
+    const [cartStateColsRows] = await db.execute(
       `SELECT COLUMN_NAME
        FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = ?
@@ -268,7 +286,7 @@ async function ensureSchemaFixes() {
          AND COLUMN_NAME IN ('revision','items_json')`,
       [CONFIG.db.database]
     );
-    const cartPresent = new Set(cartCols.map((row) => row.COLUMN_NAME));
+    const cartPresent = new Set(cartStateColsRows.map((row) => row.COLUMN_NAME));
     if (!cartPresent.has('revision')) {
       await db.execute(`ALTER TABLE cart_states ADD COLUMN revision BIGINT NOT NULL DEFAULT 0`);
     }
@@ -1220,12 +1238,12 @@ function parseCartStatePayload(rawValue) {
 
 async function getStoredCartState(clientId) {
   const [rows] = await db.execute(
-    'SELECT client_id,revision,items_json,updated_at FROM cart_states WHERE client_id=? LIMIT 1',
+    `SELECT ${cartStateClientColumn},revision,items_json,updated_at FROM cart_states WHERE ${cartStateClientColumn}=? LIMIT 1`,
     [clientId]
   );
   if (!rows.length) return { clientId, revision: 0, items: [], updatedAt: null };
   return {
-    clientId: Number(rows[0].client_id),
+    clientId: Number(rows[0][cartStateClientColumn]),
     revision: Number(rows[0].revision || 0),
     items: parseCartStatePayload(rows[0].items_json),
     updatedAt: rows[0].updated_at || null
@@ -1237,7 +1255,7 @@ async function saveCartState(clientId, items, expectedRevision, updatedBy = 'cli
   try {
     await conn.beginTransaction();
     const [rows] = await conn.execute(
-      'SELECT client_id,revision,items_json FROM cart_states WHERE client_id=? FOR UPDATE',
+      `SELECT ${cartStateClientColumn},revision,items_json FROM cart_states WHERE ${cartStateClientColumn}=? FOR UPDATE`,
       [clientId]
     );
     const currentRevision = rows.length ? Number(rows[0].revision || 0) : 0;
@@ -1250,12 +1268,12 @@ async function saveCartState(clientId, items, expectedRevision, updatedBy = 'cli
     const payload = JSON.stringify(Array.isArray(items) ? items : []);
     if (rows.length) {
       await conn.execute(
-        'UPDATE cart_states SET revision=?, items_json=?, updated_by=?, updated_at=NOW() WHERE client_id=?',
+        `UPDATE cart_states SET revision=?, items_json=?, updated_by=?, updated_at=NOW() WHERE ${cartStateClientColumn}=?`,
         [nextRevision, payload, String(updatedBy || 'client').slice(0, 80), clientId]
       );
     } else {
       await conn.execute(
-        'INSERT INTO cart_states (client_id,revision,items_json,updated_by) VALUES (?,?,?,?)',
+        `INSERT INTO cart_states (${cartStateClientColumn},revision,items_json,updated_by) VALUES (?,?,?,?)`,
         [clientId, nextRevision, payload, String(updatedBy || 'client').slice(0, 80)]
       );
     }

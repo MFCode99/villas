@@ -113,8 +113,8 @@ function mkCard(p){
   // cor select
   var corSel = document.createElement("select");
   corSel.id = "cor_" + p.ref;
-  p.cores.forEach(function(c){ var o=document.createElement("option"); o.value=c; o.textContent=c; corSel.appendChild(o); });
-  if(p.cores.length) corSel.value = p.cores[0];
+  p.cores.forEach(function(c){ var o=document.createElement("option"); o.value=normalizeChoiceText(c); o.textContent=c; corSel.appendChild(o); });
+  if(p.cores.length) corSel.value = normalizeChoiceText(p.cores[0]);
 
   // tam select/hidden
   var tamEl;
@@ -122,13 +122,13 @@ function mkCard(p){
     tamEl = document.createElement("select");
     tamEl.id = "tam_" + p.ref;
     tamEl.style.maxWidth = "110px";
-    p.tams.forEach(function(t){ var o=document.createElement("option"); o.value=t; o.textContent=t; tamEl.appendChild(o); });
-    if(p.tams.length) tamEl.value = p.tams[0];
+    p.tams.forEach(function(t){ var o=document.createElement("option"); o.value=normalizeChoiceText(t); o.textContent=t; tamEl.appendChild(o); });
+    if(p.tams.length) tamEl.value = normalizeChoiceText(p.tams[0]);
   } else {
     tamEl = document.createElement("input");
     tamEl.type = "hidden";
     tamEl.id = "tam_" + p.ref;
-    tamEl.value = p.tams[0] || "";
+    tamEl.value = normalizeChoiceText(p.tams[0] || "");
   }
 
   body.innerHTML =
@@ -158,6 +158,9 @@ function mkCard(p){
   var qi = document.createElement("input"); qi.type="number"; qi.className="qinp"; qi.id="qty_"+p.ref;
   var qStep = inferQtyStep(p);
   qi.value=qStep; qi.min=qStep; qi.step=qStep; qi.max="9999";
+  card.dataset.selectedCor = normalizeChoiceText(corSel.value || (p.cores[0] || ""));
+  card.dataset.selectedTam = normalizeChoiceText(p.tams.length ? p.tams[0] : "");
+  card.dataset.selectedQty = String(qStep);
   var qp = document.createElement("button"); qp.className="qbtn"; qp.dataset.action="plus"; qp.dataset.ref=p.ref; qp.textContent="+";
   var ab = document.createElement("button"); ab.className="abtn"; ab.id="abtn_"+p.ref; ab.dataset.action="add"; ab.dataset.ref=p.ref; ab.textContent="Adicionar";
   qrow.appendChild(qm); qrow.appendChild(qi); qrow.appendChild(qp); qrow.appendChild(ab);
@@ -190,9 +193,17 @@ document.getElementById("main").addEventListener("click", function(e){
 });
 document.getElementById("main").addEventListener("change", function(e){
   var input = e.target;
-  if(!input || !input.id || input.id.indexOf("qty_") !== 0) return;
-  var ref = input.id.replace("qty_","");
-  input.value = normalizeQtyValue(ref, input.value);
+  if(!input || !input.id) return;
+  if(input.id.indexOf("qty_") === 0){
+    var ref = input.id.replace("qty_","");
+    input.value = normalizeQtyValue(ref, input.value);
+    syncCardSelection(ref);
+    return;
+  }
+  if(input.id.indexOf("cor_") === 0 || input.id.indexOf("tam_") === 0){
+    var ref2 = input.id.replace(/^cor_|^tam_/,"");
+    syncCardSelection(ref2);
+  }
 });
 
 // â”€â”€ ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -212,14 +223,37 @@ function normalizeQtyValue(ref, value){
   if(!isFinite(num) || num < min) return min;
   return Math.max(min, Math.ceil(num / step) * step);
 }
+function getCardByRef(ref){
+  return document.getElementById("card-" + ref);
+}
+function syncCardSelection(ref){
+  var card = getCardByRef(ref);
+  if(!card) return;
+  var corEl = document.getElementById("cor_" + ref);
+  var tamEl = document.getElementById("tam_" + ref);
+  var qtyEl = document.getElementById("qty_" + ref);
+  card.dataset.selectedCor = normalizeChoiceText(corEl ? corEl.value : "");
+  card.dataset.selectedTam = normalizeChoiceText(tamEl ? tamEl.value : "");
+  card.dataset.selectedQty = String(qtyEl ? normalizeQtyValue(ref, qtyEl.value) : minFor(ref));
+}
+function readCardSelection(ref){
+  var card = getCardByRef(ref);
+  if(!card) return { cor:"", tam:"", qty:minFor(ref) };
+  return {
+    cor: normalizeChoiceText(card.dataset.selectedCor || ""),
+    tam: normalizeChoiceText(card.dataset.selectedTam || ""),
+    qty: normalizeQtyValue(ref, card.dataset.selectedQty || minFor(ref))
+  };
+}
 function readLiveProductSelection(ref){
+  var card = getCardByRef(ref);
   var corEl = document.getElementById("cor_" + ref);
   var tamEl = document.getElementById("tam_" + ref);
   var qtyEl = document.getElementById("qty_" + ref);
   return {
-    cor: corEl ? corEl.value : "",
-    tam: tamEl ? tamEl.value : "",
-    qty: qtyEl ? normalizeQtyValue(ref, qtyEl.value) : minFor(ref)
+    cor: normalizeChoiceText(corEl ? corEl.value : (card ? card.dataset.selectedCor : "")),
+    tam: normalizeChoiceText(tamEl ? tamEl.value : (card ? card.dataset.selectedTam : "")),
+    qty: normalizeQtyValue(ref, qtyEl ? qtyEl.value : (card ? card.dataset.selectedQty : minFor(ref)))
   };
 }
 
@@ -457,7 +491,7 @@ function openProductViewer(ref){
   var p = PRODS[ref];
   var bg = document.getElementById("product-view-bg");
   if(!p || !bg) return;
-  var opts = getSelectedProductOptions(ref);
+  var opts = readCardSelection(ref);
   var img = IMGS[ref] || "";
   var imgEl = document.getElementById("product-view-img");
   var emptyEl = document.getElementById("product-view-empty");
@@ -472,10 +506,54 @@ function openProductViewer(ref){
   document.getElementById("product-view-colors").textContent = (p.cores || []).join(", ") || "-";
   document.getElementById("product-view-sizes").textContent = (p.tams || []).join(", ") || "-";
   document.getElementById("product-view-step").textContent = inferQtyStep(p) + " em " + inferQtyStep(p);
-  document.getElementById("product-view-choice").textContent = [opts.cor, opts.tam, opts.qty + " un."].filter(Boolean).join(" · ");
-  document.getElementById("product-view-add").dataset.ref = p.ref;
+  var corSel = document.getElementById("product-view-cor");
+  var tamSel = document.getElementById("product-view-tam");
+  var qtyInp = document.getElementById("product-view-qty");
+  corSel.innerHTML = "";
+  (p.cores || []).forEach(function(c){
+    var o = document.createElement("option");
+    o.value = normalizeChoiceText(c);
+    o.textContent = c;
+    corSel.appendChild(o);
+  });
+  if(corSel.options.length){
+    corSel.value = normalizeChoiceText(opts.cor || corSel.options[0].value);
+  }
+  tamSel.innerHTML = "";
+  (p.tams || []).forEach(function(t){
+    var o = document.createElement("option");
+    o.value = normalizeChoiceText(t);
+    o.textContent = t;
+    tamSel.appendChild(o);
+  });
+  if(tamSel.options.length){
+    tamSel.value = normalizeChoiceText(opts.tam || tamSel.options[0].value);
+  }
+  var qtyValue = normalizeQtyValue(ref, opts.qty || inferQtyStep(p));
+  qtyInp.value = qtyValue;
+  qtyInp.min = inferQtyStep(p);
+  qtyInp.step = inferQtyStep(p);
+  document.getElementById("product-view-choice").textContent = [corSel.value, tamSel.value, qtyValue + " un."].filter(Boolean).join(" · ");
+  var addBtn = document.getElementById("product-view-add");
+  addBtn.dataset.ref = p.ref;
+  addBtn.dataset.cor = corSel.value || "";
+  addBtn.dataset.tam = tamSel.value || "";
+  addBtn.dataset.qty = String(qtyValue);
   document.getElementById("product-view-edit").dataset.ref = p.ref;
   document.getElementById("product-view-edit").style.display = loggedClient && loggedClient.admin ? "" : "none";
+  corSel.onchange = function(){
+    addBtn.dataset.cor = this.value || "";
+    document.getElementById("product-view-choice").textContent = [this.value, tamSel.value, normalizeQtyValue(ref, qtyInp.value) + " un."].filter(Boolean).join(" · ");
+  };
+  tamSel.onchange = function(){
+    addBtn.dataset.tam = this.value || "";
+    document.getElementById("product-view-choice").textContent = [corSel.value, this.value, normalizeQtyValue(ref, qtyInp.value) + " un."].filter(Boolean).join(" · ");
+  };
+  qtyInp.onchange = function(){
+    this.value = normalizeQtyValue(ref, this.value);
+    addBtn.dataset.qty = String(this.value);
+    document.getElementById("product-view-choice").textContent = [corSel.value, tamSel.value, this.value + " un."].filter(Boolean).join(" · ");
+  };
   bg.classList.add("on");
 }
 function closeProductViewer(){
@@ -489,15 +567,22 @@ function changeQty(ref,d){
   var cur  = parseInt(qi.value) || min;
   var next = cur + (d * step);
   qi.value = Math.max(min, next);
+  syncCardSelection(ref);
 }
 function addToCart(ref, corOverride, tamOverride, qtyOverride){
   var p = PRODS[ref]; if(!p || p.active === false) return;
+  var card = getCardByRef(ref);
   var live = readLiveProductSelection(ref);
   var cor = normalizeChoiceText(corOverride != null ? corOverride : live.cor);
   var tam = normalizeChoiceText(tamOverride != null ? tamOverride : live.tam);
   var qtyInput = document.getElementById("qty_"+ref);
   var qty = normalizeQtyValue(ref, qtyOverride != null ? qtyOverride : live.qty);
   if(qtyInput) qtyInput.value = qty;
+  if(card){
+    card.dataset.selectedCor = cor;
+    card.dataset.selectedTam = tam;
+    card.dataset.selectedQty = String(qty);
+  }
   var ex = null;
   var key = [ref, cor, tam].join("|");
   for(var i=0;i<cart.length;i++){ if(cart[i].key===key || (cart[i].ref===ref&&cart[i].cor===cor&&cart[i].tam===tam)){ex=cart[i];break;} }
