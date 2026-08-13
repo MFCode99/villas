@@ -214,13 +214,11 @@ function syncCartPanelBadgeOnly(){
 function scheduleCartSync(){
   if(!loggedClient || !authToken) return Promise.resolve(false);
   cartMutationVersion += 1;
-  if(cartSyncTimer) clearTimeout(cartSyncTimer);
-  cartSyncPromise = new Promise(function(resolve){
-    cartSyncTimer = setTimeout(function(){
-      cartSyncTimer = null;
-      resolve();
-    }, 40);
-  }).then(function(){
+  if(cartSyncTimer){
+    clearTimeout(cartSyncTimer);
+    cartSyncTimer = null;
+  }
+  cartSyncPromise = Promise.resolve().then(function(){
     return flushCartSync();
   });
   return cartSyncPromise;
@@ -274,6 +272,7 @@ async function flushCartSync(){
     var response = await fetch(BASE_URL + "/me/cart", {
       method: "PUT",
       headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
+      keepalive: true,
       body: JSON.stringify(body)
     });
     var res = await response.json().catch(function(){ return {}; });
@@ -343,6 +342,7 @@ function clearCartOnServer(){
   return fetch(BASE_URL + "/me/cart", {
     method: "DELETE",
     headers: { "Content-Type":"application/json", "X-Token": authToken || "" },
+    keepalive: true,
     body: JSON.stringify({ revision: cartRevision })
   })
   .then(function(r){ return r.json().then(function(data){ return { ok:r.ok, status:r.status, body:data || {} }; }); })
@@ -551,6 +551,12 @@ document.getElementById("ov").addEventListener("click",function(e){
   closeCartPanel();
   closeAdmin();
   closeNotifications();
+});
+
+window.addEventListener("pagehide", function(){
+  if(loggedClient && authToken){
+    flushCartSync();
+  }
 });
 
 // â”€â”€ SEARCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
