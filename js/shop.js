@@ -9,6 +9,10 @@ var lastCartSerialized = '';
 var cartSyncPromise = Promise.resolve();
 var CART_BACKUP_PREFIX = 'villas_cart_backup_';
 var cartBackupLoaded = false;
+var normalizeChoiceText = window.normalizeChoiceText || function(value){
+  return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+};
+window.normalizeChoiceText = normalizeChoiceText;
 
 function getCartBackupKey(){
   var clientId = loggedClient && (loggedClient.id || loggedClient.user || loggedClient.email || "");
