@@ -1690,6 +1690,7 @@ async function handleRequest(req, res) {
         const hydratedCart = await validateAndHydrateCartItems(storedCart.items, { strict: false });
         return sendJSON(res, 409, {
           ok:false,
+          code:'CART_REVISION_CONFLICT',
           message:'Carrinho desatualizado. Volta a abrir a encomenda.',
           revision: storedCart.revision || 0,
           items: hydratedCart.items
@@ -1740,18 +1741,18 @@ async function handleRequest(req, res) {
       });
     } catch(e) {
       if (e.code === 'INVALID_CLIENT') {
-        return sendJSON(res, 401, { ok:false, message:e.message });
+        return sendJSON(res, 401, { ok:false, code:e.code, message:e.message });
       }
       if (e.code === 'UNAUTHORIZED') {
-        return sendJSON(res, 401, { ok:false, message:e.message });
+        return sendJSON(res, 401, { ok:false, code:e.code, message:e.message });
       }
       if (e.code === 'MISSING_REQUEST_ID') {
-        return sendJSON(res, 400, { ok:false, message:e.message });
+        return sendJSON(res, 400, { ok:false, code:e.code, message:e.message });
       }
       if (e.code === 'MIN_ORDER_TOTAL') {
-        return sendJSON(res, 400, { ok:false, message:e.message });
+        return sendJSON(res, 400, { ok:false, code:e.code, message:e.message });
       }
-      return sendJSON(res, 500, { ok:false, message:e.message });
+      return sendJSON(res, 500, { ok:false, code:e.code || 'ORDER_CREATE_FAILED', message:e.message });
     }
   }
 

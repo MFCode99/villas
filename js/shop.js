@@ -236,6 +236,35 @@ function cartSelectionPayload(sourceCart){
   });
 }
 
+function prepareCheckoutPayloadItems(){
+  var items = cartSelectionPayload();
+  var normalized = items.map(function(item){
+    return {
+      ref: item.ref,
+      cor: normalizeChoiceText(item.cor),
+      tam: normalizeChoiceText(item.tam),
+      qty: normalizeQtyValue(item.ref, item.qty)
+    };
+  }).filter(function(item){
+    return !!(item.ref && item.cor && item.tam && item.qty > 0);
+  });
+  var changed = JSON.stringify(items) !== JSON.stringify(normalized);
+  if(changed){
+    cart = cart.map(function(item){
+      var ref = String(item.ref || '').trim();
+      return Object.assign({}, item, {
+        ref: ref,
+        cor: normalizeChoiceText(item.cor),
+        tam: normalizeChoiceText(item.tam),
+        qty: normalizeQtyValue(ref, item.qty)
+      });
+    });
+    renderCart();
+    scheduleCartSync();
+  }
+  return { items: normalized, changed: changed };
+}
+
 function applyCartStateFromServer(payload){
   if(!payload || typeof payload.revision === "undefined") return false;
   var revision = Number(payload.revision || 0);
@@ -902,6 +931,16 @@ document.getElementById("mo-send").addEventListener("click", function(){
   document.getElementById("send-status").className = "send-status";
 
   waitForCartSync().then(function(){
+    var prep = prepareCheckoutPayloadItems();
+    var payloadItems = prep.items;
+    if(!payloadItems.length){
+      var st0 = document.getElementById("send-status");
+      st0.textContent = "O carrinho está vazio ou inválido.";
+      st0.className = "send-status err";
+      btn.querySelector(".mlbl").textContent = "Enviar Encomenda";
+      btn.disabled = false;
+      return;
+    }
     var payload = {
       clientId: loggedClient ? (loggedClient.id || 0) : 0,
       client:  m.name,
@@ -909,46 +948,68 @@ document.getElementById("mo-send").addEventListener("click", function(){
       request_id: getOrderRequestId(),
       cart_revision: cartRevision,
       notes:   m.notes || "",
-      items:   cartSelectionPayload()
+      items:   payloadItems
     };
 
-    fetch(SERVER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Token": authToken||"" },
-      body: JSON.stringify(payload)
-    })
-    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,data:d}; }); })
-    .then(function(res){
-      var st = document.getElementById("send-status");
-      if(res.ok){
-        if(res.data && res.data.emailStatus === "failed"){
-          st.textContent = "\u26A0 Encomenda criada, mas o email falhou. O pedido ficou guardado.";
-          st.className = "send-status err";
-        } else {
-          st.textContent = "\u2705 Encomenda enviada com sucesso!";
-          st.className = "send-status ok";
+    function postOrder(retryOnConflict){
+      return fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Token": authToken||"" },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,status:r.status,data:d}; }); })
+      .then(function(res){
+        if(res.ok){
+          var st = document.getElementById("send-status");
+          if(res.data && res.data.emailStatus === "failed"){
+            st.textContent = "\u26A0 Encomenda criada, mas o email falhou. O pedido ficou guardado.";
+            st.className = "send-status err";
+          } else {
+            st.textContent = "\u2705 Encomenda enviada com sucesso!";
+            st.className = "send-status ok";
+          }
+          cart = [];
+          cartRevision = Number(res.data && res.data.cartRevision != null ? res.data.cartRevision : (cartRevision + 1));
+          renderCart();
+          clearOrderRequestId();
+          saveToHistory();
+          btn.querySelector(".mlbl").textContent = "Enviado!";
+          setTimeout(function(){ document.getElementById("modal-bg").classList.remove("on"); }, 2000);
+          return true;
         }
-        cart = [];
-        cartRevision = Number(res.data && res.data.cartRevision != null ? res.data.cartRevision : (cartRevision + 1));
-        renderCart();
-        clearOrderRequestId();
-        saveToHistory();
-        btn.querySelector(".mlbl").textContent = "Enviado!";
-        setTimeout(function(){ document.getElementById("modal-bg").classList.remove("on"); }, 2000);
-      } else {
-        st.textContent = "\u274C Erro ao enviar. Tenta outra op\u00E7\u00E3o.";
+        if(retryOnConflict && res.status === 409 && res.data && res.data.code === "CART_REVISION_CONFLICT"){
+          if(typeof applyCartStateFromServer === "function" && typeof res.data.revision !== "undefined"){
+            applyCartStateFromServer({ revision: res.data.revision, items: Array.isArray(res.data.items) ? res.data.items : [] });
+          }
+          payload.cart_revision = Number(res.data && res.data.revision != null ? res.data.revision : cartRevision);
+          payload.items = prepareCheckoutPayloadItems().items;
+          return waitForCartSync().then(function(){ return postOrder(false); });
+        }
+        var st = document.getElementById("send-status");
+        st.textContent = (res.data && res.data.message) ? ("\u274C " + res.data.message) : "\u274C Erro ao enviar. Tenta outra op\u00E7\u00E3o.";
         st.className = "send-status err";
         btn.querySelector(".mlbl").textContent = "Enviar Encomenda";
         btn.disabled = false;
-      }
-    })
-    .catch(function(){
-      var st = document.getElementById("send-status");
-      st.textContent = "\u274C Sem liga\u00E7\u00E3o. Tenta outra op\u00E7\u00E3o.";
-      st.className = "send-status err";
-      btn.querySelector(".mlbl").textContent = "Enviar Encomenda";
-      btn.disabled = false;
-    });
+        return false;
+      })
+      .catch(function(){
+        var st = document.getElementById("send-status");
+        st.textContent = "\u274C Sem liga\u00E7\u00E3o. Tenta outra op\u00E7\u00E3o.";
+        st.className = "send-status err";
+        btn.querySelector(".mlbl").textContent = "Enviar Encomenda";
+        btn.disabled = false;
+        return false;
+      });
+    }
+    if(prep.changed){
+      waitForCartSync().then(function(){
+        payload.cart_revision = cartRevision;
+        payload.items = prepareCheckoutPayloadItems().items;
+        postOrder(true);
+      });
+      return;
+    }
+    postOrder(true);
   });
 });
 
