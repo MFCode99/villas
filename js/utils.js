@@ -1,4 +1,4 @@
-var VILLAS_APP_VERSION = window.VILLAS_APP_VERSION || "20260814-01";
+var VILLAS_APP_VERSION = window.VILLAS_APP_VERSION || "20260813-02";
 
 function escH(s){ return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escAttr(s){ return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }

@@ -17,6 +17,7 @@ const {
   cartItemKey,
   createRequestId
 } = require('./lib/villas-core');
+const normalizeChoiceText = coreNormalizeChoiceText;
 
 // â”€â”€ CONFIGURAÃ‡ÃƒO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const RUNTIME_CONFIG_FILE = path.join(__dirname, '.runtime-config.json');
