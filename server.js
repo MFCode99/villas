@@ -42,6 +42,25 @@ const sessions = new Map();
 const cartWriteLocks = new Map();
 let smtpStatus = { ready:false, message:'SMTP ainda não verificado.' };
 let runtimeConfig = loadRuntimeConfig();
+const VILLAS_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Villas">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#151515"/>
+      <stop offset="1" stop-color="#0b0b0b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2dd9b"/>
+      <stop offset="1" stop-color="#b6912d"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <path d="M17 18h8l7 22 7-22h8l-11 30h-8L17 18Z" fill="url(#gold)"/>
+  <path d="M19 14h26v4H19z" fill="#d8c58a" opacity=".35"/>
+  <circle cx="49" cy="15" r="3.2" fill="url(#gold)"/>
+</svg>`;
+function getVillasLogoDataUri() {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VILLAS_LOGO_SVG)}`;
+}
 
 function loadRuntimeConfig() {
   try {
@@ -405,6 +424,7 @@ function buildOrderHTML(order, opts = {}) {
   const hidePrices = !!opts.hidePrices;
   const { client, nif, date, time, notes, total, units, lines, items } = order;
   const publicNumber = order.publicNumber || order.public_number || buildPublicOrderNumber(order.id, order.criado_em);
+  const logoUri = getVillasLogoDataUri();
   const rows = items.map((c, i) => {
     const bg = i % 2 === 0 ? '#ffffff' : '#f9f7f4';
     const td = 'padding:7px 10px;border-bottom:1px solid #e2ddd5;font-size:12px;';
@@ -431,7 +451,7 @@ function buildOrderHTML(order, opts = {}) {
       + "<th style='color:#6c6458;padding:8px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Total</th>";
   const unitsTopHtml = hidePrices
     ? ''
-    : "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Unidades</strong>" + units + "</div>";
+    : "<div class='meta-card'><span class='meta-label'>Unidades</span><span class='meta-value'>" + units + "</span></div>";
   const totalsHtml = hidePrices
     ? "<div style='text-align:right;padding:12px 0;border-top:2px solid #c9a84c;margin-bottom:20px'>"
       + "<div style='font-size:11px;color:#888;margin-top:2px'>" + lines + " linhas</div>"
@@ -452,18 +472,36 @@ function buildOrderHTML(order, opts = {}) {
     + ".doc-shell{padding:0 0 6mm}"
     + ".prtbtn{display:block;margin:0 auto;background:#c9a84c;color:#0f0f0f;border:none;padding:12px 40px;font-size:14px;font-weight:700;border-radius:4px;cursor:pointer}"
     + "@media print{.prtbtn{display:none}}"
+    + ".brand{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding:18px 20px;border:1px solid #e4dccd;border-radius:18px;background:linear-gradient(180deg,#fffdf8 0%,#f7f1e8 100%);box-shadow:0 10px 26px rgba(15,15,15,.05)}"
+    + ".brand-logo{width:58px;height:58px;flex:0 0 58px;border-radius:16px;box-shadow:0 8px 18px rgba(15,15,15,.12)}"
+    + ".brand-copy{flex:1;min-width:0}"
+    + ".brand-kicker{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#8a8175;margin-bottom:4px}"
+    + ".brand-title{font-family:Georgia,serif;font-size:28px;line-height:1;color:#111;margin:0}"
+    + ".brand-sub{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a8175;margin-top:4px}"
+    + ".meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}"
+    + ".meta-card{background:#fff;border:1px solid #e4dccd;border-radius:12px;padding:10px 12px;min-height:58px}"
+    + ".meta-label{display:block;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:#8a8175;margin-bottom:4px}"
+    + ".meta-value{font-size:13px;font-weight:700;color:#111;word-break:break-word}"
+    + ".section-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8a8175;margin:18px 0 10px}"
     + "</style></head><body>"
     + "<div class='doc-shell'>"
-    + "<h1 style='font-family:Georgia,serif;font-size:28px;border-bottom:2px solid #c9a84c;padding-bottom:8px;margin-bottom:4px'>Villas&reg;</h1>"
-    + "<p style='font-size:10px;color:#888;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px'>Outono/Inverno 2025&middot;2026 &mdash; Nota de Encomenda</p>"
-    + "<div style='display:flex;flex-wrap:wrap;gap:28px;background:#f7f4ef;padding:12px 16px;border-radius:4px;margin-bottom:18px'>"
-    + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Número</strong>" + publicNumber + "</div>"
-    + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Cliente</strong>" + (client || "&mdash;") + "</div>"
-    + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>NIF</strong>" + (nif || "&mdash;") + "</div>"
-    + "<div style='font-size:13px'><strong style='font-size:10px;display:block;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px'>Data</strong>" + date + " " + time + "</div>"
+    + "<div class='brand'>"
+    + "<img class='brand-logo' src='" + logoUri + "' alt='Villas'>"
+    + "<div class='brand-copy'>"
+    + "<div class='brand-kicker'>Nota de Encomenda</div>"
+    + "<h1 class='brand-title'>Villas&reg;</h1>"
+    + "<div class='brand-sub'>Outono/Inverno 2025&middot;2026</div>"
+    + "</div>"
+    + "</div>"
+    + "<div class='meta-grid'>"
+    + "<div class='meta-card'><span class='meta-label'>Número</span><span class='meta-value'>" + publicNumber + "</span></div>"
+    + "<div class='meta-card'><span class='meta-label'>Cliente</span><span class='meta-value'>" + (client || "&mdash;") + "</span></div>"
+    + "<div class='meta-card'><span class='meta-label'>NIF</span><span class='meta-value'>" + (nif || "&mdash;") + "</span></div>"
+    + "<div class='meta-card'><span class='meta-label'>Data</span><span class='meta-value'>" + date + " " + time + "</span></div>"
     + unitsTopHtml
     + "</div>"
     + notesHtml
+    + "<div class='section-title'>Linhas da Encomenda</div>"
     + "<table><thead><tr style='background:#f7f4ef;border-top:1px solid #e2ddd5;border-bottom:1px solid #e2ddd5'>"
     + "<th style='color:#6c6458;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Ref.</th>"
     + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Descrição</th>"
@@ -493,8 +531,11 @@ async function generatePDF(html) {
       displayHeaderFooter: true,
       headerTemplate: `
         <div style="width:100%;padding:0 10mm;font-size:9px;color:#8a8175;text-transform:uppercase;letter-spacing:1.2px;font-family:Arial,sans-serif;">
-          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-bottom:1px solid #e9e1d4;padding:0 0 4px;">
-            <span>Villas&reg; Nota de Encomenda</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-bottom:1px solid #e9e1d4;padding:0 0 4px;gap:12px;">
+            <span style="display:flex;align-items:center;gap:8px;">
+              <img src="${getVillasLogoDataUri()}" alt="Villas" style="width:18px;height:18px;border-radius:5px;display:block;">
+              <span>Villas&reg; Nota de Encomenda</span>
+            </span>
             <span style="text-transform:none;letter-spacing:0;">${new Date().toLocaleDateString('pt-PT')}</span>
           </div>
         </div>
@@ -1579,12 +1620,12 @@ async function handleRequest(req, res) {
   const requestUrl = new URL(req.url, 'http://localhost');
   const url = requestUrl.pathname;
 
-    if (req.method === 'GET' && (url.startsWith('/styles/') || url.startsWith('/js/'))) {
-    const relativePath = url.replace(/^\//, '');
-    const filePath = path.join(__dirname, relativePath);
-    if (!filePath.startsWith(__dirname)) {
-      res.writeHead(403, { 'Content-Type':'text/plain; charset=utf-8' });
-      res.end('Acesso negado');
+    if (req.method === 'GET' && (url.startsWith('/styles/') || url.startsWith('/js/') || url.startsWith('/assets/'))) {
+      const relativePath = url.replace(/^\//, '');
+      const filePath = path.join(__dirname, relativePath);
+      if (!filePath.startsWith(__dirname)) {
+        res.writeHead(403, { 'Content-Type':'text/plain; charset=utf-8' });
+        res.end('Acesso negado');
       return;
     }
     serveStaticFile(res, filePath);

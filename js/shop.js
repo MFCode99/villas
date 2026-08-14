@@ -513,6 +513,8 @@ function openProductViewer(ref){
   var corSel = document.getElementById("product-view-cor");
   var tamSel = document.getElementById("product-view-tam");
   var qtyInp = document.getElementById("product-view-qty");
+  var qtyMinus = document.getElementById("product-view-qty-minus");
+  var qtyPlus = document.getElementById("product-view-qty-plus");
   corSel.innerHTML = "";
   (p.cores || []).forEach(function(c){
     var o = document.createElement("option");
@@ -533,10 +535,20 @@ function openProductViewer(ref){
   if(tamSel.options.length){
     tamSel.value = normalizeChoiceText(opts.tam || tamSel.options[0].value);
   }
-  var qtyValue = normalizeQtyValue(ref, opts.qty || inferQtyStep(p));
+  var qtyStep = inferQtyStep(p);
+  function refreshProductViewChoice(){
+    document.getElementById("product-view-choice").textContent = [corSel.value, tamSel.value, normalizeQtyValue(ref, qtyInp.value) + " un."].filter(Boolean).join(" · ");
+  }
+  function setProductViewQty(nextValue){
+    qtyInp.value = normalizeQtyValue(ref, nextValue);
+    addBtn.dataset.qty = String(qtyInp.value);
+    refreshProductViewChoice();
+  }
+  var qtyValue = normalizeQtyValue(ref, opts.qty || qtyStep);
   qtyInp.value = qtyValue;
-  qtyInp.min = inferQtyStep(p);
-  qtyInp.step = inferQtyStep(p);
+  qtyInp.min = qtyStep;
+  qtyInp.step = qtyStep;
+  qtyInp.max = "9999";
   document.getElementById("product-view-choice").textContent = [corSel.value, tamSel.value, qtyValue + " un."].filter(Boolean).join(" · ");
   var addBtn = document.getElementById("product-view-add");
   addBtn.dataset.ref = p.ref;
@@ -547,16 +559,20 @@ function openProductViewer(ref){
   document.getElementById("product-view-edit").style.display = loggedClient && loggedClient.admin ? "" : "none";
   corSel.onchange = function(){
     addBtn.dataset.cor = this.value || "";
-    document.getElementById("product-view-choice").textContent = [this.value, tamSel.value, normalizeQtyValue(ref, qtyInp.value) + " un."].filter(Boolean).join(" · ");
+    refreshProductViewChoice();
   };
   tamSel.onchange = function(){
     addBtn.dataset.tam = this.value || "";
-    document.getElementById("product-view-choice").textContent = [corSel.value, this.value, normalizeQtyValue(ref, qtyInp.value) + " un."].filter(Boolean).join(" · ");
+    refreshProductViewChoice();
   };
   qtyInp.onchange = function(){
-    this.value = normalizeQtyValue(ref, this.value);
-    addBtn.dataset.qty = String(this.value);
-    document.getElementById("product-view-choice").textContent = [corSel.value, tamSel.value, this.value + " un."].filter(Boolean).join(" · ");
+    setProductViewQty(this.value);
+  };
+  qtyMinus.onclick = function(){
+    setProductViewQty((parseInt(qtyInp.value, 10) || qtyStep) - qtyStep);
+  };
+  qtyPlus.onclick = function(){
+    setProductViewQty((parseInt(qtyInp.value, 10) || qtyStep) + qtyStep);
   };
   bg.classList.add("on");
 }
