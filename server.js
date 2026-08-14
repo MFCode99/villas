@@ -62,6 +62,33 @@ function getVillasLogoDataUri() {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(VILLAS_LOGO_SVG)}`;
 }
 
+function formatDateTimeLisbon(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return { date: '', time: '' };
+  }
+  const dateParts = new Intl.DateTimeFormat('pt-PT', {
+    timeZone: 'Europe/Lisbon',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const timeParts = new Intl.DateTimeFormat('pt-PT', {
+    timeZone: 'Europe/Lisbon',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(date);
+  const pick = (parts, type) => {
+    const found = parts.find((part) => part.type === type);
+    return found ? found.value : '';
+  };
+  return {
+    date: `${pick(dateParts, 'day')}/${pick(dateParts, 'month')}/${pick(dateParts, 'year')}`,
+    time: `${pick(timeParts, 'hour')}:${pick(timeParts, 'minute')}`
+  };
+}
+
 function loadRuntimeConfig() {
   try {
     if (!fs.existsSync(RUNTIME_CONFIG_FILE)) return {};
@@ -422,8 +449,11 @@ async function updateEmailConfig(data = {}) {
 
 function buildOrderHTML(order, opts = {}) {
   const hidePrices = !!opts.hidePrices;
-  const { client, nif, date, time, notes, total, units, lines, items } = order;
+  const { client, nif, notes, total, units, lines, items } = order;
   const publicNumber = order.publicNumber || order.public_number || buildPublicOrderNumber(order.id, order.criado_em);
+  const printedDateTime = formatDateTimeLisbon(order.criado_em || order.createdAt || order.dateTime || order.date);
+  const date = printedDateTime.date || order.date || '';
+  const time = printedDateTime.time || order.time || '';
   const logoUri = getVillasLogoDataUri();
   const rows = items.map((c, i) => {
     const bg = i % 2 === 0 ? '#ffffff' : '#f9f7f4';
@@ -555,7 +585,7 @@ async function generatePDF(html) {
               <img src="${getVillasLogoDataUri()}" alt="Villas" style="width:16px;height:16px;border-radius:4px;display:block;">
               <span>Villas - Nota de Encomenda</span>
             </span>
-            <span style="text-transform:none;letter-spacing:0;">${new Date().toLocaleDateString('pt-PT')}</span>
+            <span style="text-transform:none;letter-spacing:0;">${formatDateTimeLisbon(new Date()).date}</span>
           </div>
         </div>
       `,
@@ -960,8 +990,40 @@ async function getAdminStats() {
        COUNT(DISTINCT cliente_id) AS total_customers,
        COALESCE(SUM(CASE WHEN email_status='sent' THEN 1 ELSE 0 END), 0) AS emails_sent,
        COALESCE(SUM(CASE WHEN email_status='failed' THEN 1 ELSE 0 END), 0) AS emails_failed,
+       COALESCE(SUM(CASE WHEN criado_em >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END), 0) AS orders_7d,
+       COALESCE(SUM(CASE WHEN criado_em >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) AS orders_30d,
        MAX(criado_em) AS last_order_at
      FROM encomendas`
+  );
+
+  const [[productRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS total_products,
+       COALESCE(SUM(CASE WHEN activo = 1 THEN 1 ELSE 0 END), 0) AS active_products,
+       COALESCE(SUM(CASE WHEN activo = 0 THEN 1 ELSE 0 END), 0) AS inactive_products,
+       COALESCE(SUM(CASE WHEN COALESCE(estacao,'ambos') = 'inverno' THEN 1 ELSE 0 END), 0) AS winter_products,
+       COALESCE(SUM(CASE WHEN COALESCE(estacao,'ambos') = 'verao' THEN 1 ELSE 0 END), 0) AS summer_products,
+       COALESCE(SUM(CASE WHEN COALESCE(estacao,'ambos') = 'ambos' THEN 1 ELSE 0 END), 0) AS all_season_products,
+       COALESCE(SUM(CASE WHEN COALESCE(qtd_step, 12) = 1 THEN 1 ELSE 0 END), 0) AS step_1_products,
+       COALESCE(SUM(CASE WHEN COALESCE(qtd_step, 12) = 12 THEN 1 ELSE 0 END), 0) AS step_12_products
+     FROM produtos`
+  );
+
+  const [[categoryRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS total_categories,
+       COALESCE(SUM(CASE WHEN activo = 1 THEN 1 ELSE 0 END), 0) AS active_categories,
+       COALESCE(SUM(CASE WHEN activo = 0 THEN 1 ELSE 0 END), 0) AS inactive_categories
+     FROM categorias`
+  );
+
+  const [[loginRow]] = await db.execute(
+    `SELECT
+       COALESCE(SUM(CASE WHEN criado_em >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END), 0) AS logins_7d,
+       COALESCE(SUM(CASE WHEN criado_em >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END), 0) AS logins_30d,
+       COALESCE(SUM(CASE WHEN sucesso = 0 AND criado_em >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END), 0) AS failed_logins_7d,
+       MAX(criado_em) AS last_login_at
+     FROM login_logs`
   );
 
   const [topProductsRows] = await db.execute(
@@ -975,6 +1037,19 @@ async function getAdminStats() {
      FROM encomenda_linhas el
      GROUP BY el.ref
      ORDER BY units_sold DESC, billed_total DESC, el.ref ASC
+     LIMIT 10`
+  );
+
+  const [topCategoriesRows] = await db.execute(
+    `SELECT
+       COALESCE(NULLIF(p.cat, ''), 'Sem categoria') AS category,
+       COALESCE(SUM(el.quantidade), 0) AS units_sold,
+       COALESCE(SUM(el.total_linha), 0) AS billed_total,
+       COUNT(DISTINCT el.encomenda_id) AS orders_count
+     FROM encomenda_linhas el
+     LEFT JOIN produtos p ON p.ref = el.ref
+     GROUP BY COALESCE(NULLIF(p.cat, ''), 'Sem categoria')
+     ORDER BY units_sold DESC, billed_total DESC, category ASC
      LIMIT 10`
   );
 
@@ -996,6 +1071,43 @@ async function getAdminStats() {
      LIMIT 10`
   );
 
+  const [topColorsRows] = await db.execute(
+    `SELECT
+       COALESCE(NULLIF(TRIM(el.cor), ''), 'Sem cor') AS color_name,
+       COALESCE(SUM(el.quantidade), 0) AS units_sold,
+       COALESCE(SUM(el.total_linha), 0) AS billed_total,
+       COUNT(DISTINCT el.encomenda_id) AS orders_count
+     FROM encomenda_linhas el
+     GROUP BY COALESCE(NULLIF(TRIM(el.cor), ''), 'Sem cor')
+     ORDER BY units_sold DESC, billed_total DESC, color_name ASC
+     LIMIT 10`
+  );
+
+  const [topSizesRows] = await db.execute(
+    `SELECT
+       COALESCE(NULLIF(TRIM(el.tamanho), ''), 'Sem tamanho') AS size_name,
+       COALESCE(SUM(el.quantidade), 0) AS units_sold,
+       COALESCE(SUM(el.total_linha), 0) AS billed_total,
+       COUNT(DISTINCT el.encomenda_id) AS orders_count
+     FROM encomenda_linhas el
+     GROUP BY COALESCE(NULLIF(TRIM(el.tamanho), ''), 'Sem tamanho')
+     ORDER BY units_sold DESC, billed_total DESC, size_name ASC
+     LIMIT 10`
+  );
+
+  const [monthlyRows] = await db.execute(
+    `SELECT
+       DATE_FORMAT(criado_em, '%Y-%m') AS period_key,
+       DATE_FORMAT(criado_em, '%b %Y') AS period_label,
+       COUNT(*) AS orders_count,
+       COALESCE(SUM(total), 0) AS billed_total,
+       COALESCE(SUM(unidades), 0) AS units_sold
+     FROM encomendas
+     WHERE criado_em >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     GROUP BY DATE_FORMAT(criado_em, '%Y-%m'), DATE_FORMAT(criado_em, '%b %Y')
+     ORDER BY period_key ASC`
+  );
+
   const [topOrdersRows] = await db.execute(
     `SELECT
        e.id,
@@ -1010,6 +1122,22 @@ async function getAdminStats() {
      LIMIT 10`
   );
 
+  const [recentOrdersRows] = await db.execute(
+    `SELECT
+       e.id,
+       e.public_number,
+       e.cliente_nome,
+       e.total,
+       e.unidades,
+       e.linhas,
+       e.order_status,
+       e.email_status,
+       e.criado_em
+     FROM encomendas e
+     ORDER BY e.criado_em DESC
+     LIMIT 10`
+  );
+
   return {
     summary: {
       totalOrders: Number(summaryRow.total_orders || 0),
@@ -1019,12 +1147,37 @@ async function getAdminStats() {
       totalCustomers: Number(summaryRow.total_customers || 0),
       emailsSent: Number(summaryRow.emails_sent || 0),
       emailsFailed: Number(summaryRow.emails_failed || 0),
+      orders7d: Number(summaryRow.orders_7d || 0),
+      orders30d: Number(summaryRow.orders_30d || 0),
       lastOrderAt: summaryRow.last_order_at || null
+    },
+    catalog: {
+      totalProducts: Number(productRow.total_products || 0),
+      activeProducts: Number(productRow.active_products || 0),
+      inactiveProducts: Number(productRow.inactive_products || 0),
+      winterProducts: Number(productRow.winter_products || 0),
+      summerProducts: Number(productRow.summer_products || 0),
+      allSeasonProducts: Number(productRow.all_season_products || 0),
+      step1Products: Number(productRow.step_1_products || 0),
+      step12Products: Number(productRow.step_12_products || 0),
+      totalCategories: Number(categoryRow.total_categories || 0),
+      activeCategories: Number(categoryRow.active_categories || 0),
+      inactiveCategories: Number(categoryRow.inactive_categories || 0),
+      logins7d: Number(loginRow.logins_7d || 0),
+      logins30d: Number(loginRow.logins_30d || 0),
+      failedLogins7d: Number(loginRow.failed_logins_7d || 0),
+      lastLoginAt: loginRow.last_login_at || null
     },
     topProducts: topProductsRows.map((row) => ({
       ref: row.ref,
       name: row.nome || row.ref,
       type: row.tipo || '',
+      unitsSold: Number(row.units_sold || 0),
+      billedTotal: Number(row.billed_total || 0),
+      ordersCount: Number(row.orders_count || 0)
+    })),
+    topCategories: topCategoriesRows.map((row) => ({
+      category: row.category || 'Sem categoria',
       unitsSold: Number(row.units_sold || 0),
       billedTotal: Number(row.billed_total || 0),
       ordersCount: Number(row.orders_count || 0)
@@ -1040,6 +1193,25 @@ async function getAdminStats() {
       unitsSold: Number(row.units_sold || 0),
       lastOrderAt: row.last_order_at || null
     })),
+    topColors: topColorsRows.map((row) => ({
+      color: row.color_name || 'Sem cor',
+      unitsSold: Number(row.units_sold || 0),
+      billedTotal: Number(row.billed_total || 0),
+      ordersCount: Number(row.orders_count || 0)
+    })),
+    topSizes: topSizesRows.map((row) => ({
+      size: row.size_name || 'Sem tamanho',
+      unitsSold: Number(row.units_sold || 0),
+      billedTotal: Number(row.billed_total || 0),
+      ordersCount: Number(row.orders_count || 0)
+    })),
+    monthly: monthlyRows.map((row) => ({
+      key: row.period_key || '',
+      label: row.period_label || row.period_key || '',
+      ordersCount: Number(row.orders_count || 0),
+      billedTotal: Number(row.billed_total || 0),
+      unitsSold: Number(row.units_sold || 0)
+    })),
     topOrders: topOrdersRows.map((row) => ({
       id: Number(row.id || 0),
       publicNumber: row.public_number || buildPublicOrderNumber(row.id, row.criado_em),
@@ -1047,6 +1219,17 @@ async function getAdminStats() {
       total: Number(row.total || 0),
       units: Number(row.unidades || 0),
       lines: Number(row.linhas || 0),
+      createdAt: row.criado_em || null
+    })),
+    recentOrders: recentOrdersRows.map((row) => ({
+      id: Number(row.id || 0),
+      publicNumber: row.public_number || buildPublicOrderNumber(row.id, row.criado_em),
+      client: row.cliente_nome || '',
+      total: Number(row.total || 0),
+      units: Number(row.unidades || 0),
+      lines: Number(row.linhas || 0),
+      orderStatus: row.order_status || 'created',
+      emailStatus: row.email_status || 'pending',
       createdAt: row.criado_em || null
     }))
   };

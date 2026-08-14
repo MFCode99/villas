@@ -729,11 +729,11 @@ function buildAdminOrdersSection(){
     + (list.length ? "<div class='area-section'>" + list.map(function(order){ return buildOrderCard(order, { admin:true }); }).join("") + "</div>" : "<div class='area-empty'>Nao encontramos encomendas com esse filtro.</div>");
 }
 
-function buildMetricCard(value, label, sublabel, tone){
-  return "<div class='stats-metric" + (tone ? " " + tone : "") + "'>"
-    + "<div class='stats-metric-value'>" + value + "</div>"
-    + "<div class='stats-metric-label'>" + escH(label) + "</div>"
-    + (sublabel ? "<div class='stats-metric-sub'>" + escH(sublabel) + "</div>" : "")
+function buildKpiCard(value, label, sublabel){
+  return "<div class='stats-kpi'>"
+    + "<div class='stats-kpi-value'>" + value + "</div>"
+    + "<div class='stats-kpi-label'>" + escH(label) + "</div>"
+    + (sublabel ? "<div class='stats-kpi-sub'>" + escH(sublabel) + "</div>" : "")
     + "</div>";
 }
 
@@ -746,58 +746,154 @@ function buildRankingRows(items, emptyText, renderRow){
   }).join("") + "</div>";
 }
 
+function buildOrderedListSection(title, subtitle, items, emptyText, renderRow){
+  return "<div class='stats-panel'>"
+    + "<div class='stats-panel-head'>"
+      + "<div>"
+        + "<div class='ord-title'>" + escH(title) + "</div>"
+        + (subtitle ? "<div class='ord-sub'>" + escH(subtitle) + "</div>" : "")
+      + "</div>"
+    + "</div>"
+    + buildRankingRows(items, emptyText, renderRow)
+  + "</div>";
+}
+
 function buildAdminStatsSection(){
   var stats = ADMIN_STATS || {};
   var summary = stats.summary || {};
+  var catalog = stats.catalog || {};
   var topProducts = stats.topProducts || [];
+  var topCategories = stats.topCategories || [];
   var topCustomers = stats.topCustomers || [];
+  var topColors = stats.topColors || [];
+  var topSizes = stats.topSizes || [];
   var topOrders = stats.topOrders || [];
+  var recentOrders = stats.recentOrders || [];
+  var monthly = stats.monthly || [];
   var lastOrder = summary.lastOrderAt ? formatDateTime(summary.lastOrderAt) : "Sem dados";
+  var lastLogin = catalog.lastLoginAt ? formatDateTime(catalog.lastLoginAt) : "Sem dados";
+  var avgTicket = summary.totalOrders ? (summary.totalBilled / summary.totalOrders) : 0;
   return "<div class='area-section stats-shell'>"
-    + "<div class='stats-grid'>"
-      + buildMetricCard(summary.totalOrders || 0, "Total de encomendas", lastOrder, "accent")
-      + buildMetricCard(formatMoney(summary.totalBilled || 0), "Faturação total", "Valor acumulado em encomendas")
-      + buildMetricCard(summary.totalUnits || 0, "Unidades vendidas", "Quantidade total movimentada")
-      + buildMetricCard(summary.totalCustomers || 0, "Clientes ativos", "Clientes com encomendas")
-      + buildMetricCard(summary.emailsSent || 0, "Emails enviados", "Notificações de encomenda")
-      + buildMetricCard(summary.emailsFailed || 0, "Falhas de email", "Encomendas com aviso")
+    + "<div class='stats-kpis'>"
+      + buildKpiCard(summary.totalOrders || 0, "Encomendas", "Última: " + lastOrder)
+      + buildKpiCard(formatMoney(summary.totalBilled || 0), "Faturação", "Ticket médio " + formatMoney(avgTicket))
+      + buildKpiCard(summary.totalUnits || 0, "Unidades vendidas", (summary.orders30d || 0) + " nas últimas 4 semanas")
+      + buildKpiCard(summary.totalCustomers || 0, "Clientes com compras", (summary.orders7d || 0) + " encomendas na última semana")
+      + buildKpiCard(catalog.totalProducts || 0, "Produtos", (catalog.activeProducts || 0) + " ativos · " + (catalog.inactiveProducts || 0) + " inativos")
+      + buildKpiCard(catalog.totalCategories || 0, "Categorias", (catalog.activeCategories || 0) + " ativas · " + (catalog.inactiveCategories || 0) + " inativas")
+      + buildKpiCard(summary.emailsSent || 0, "Emails enviados", (summary.emailsFailed || 0) + " falhas")
+      + buildKpiCard(catalog.logins7d || 0, "Logins 7 dias", (catalog.failedLogins7d || 0) + " falhados · último " + lastLogin)
     + "</div>"
     + "<div class='stats-panels'>"
-      + "<div class='stats-panel'>"
-        + "<div class='stats-panel-head'><div><div class='ord-title'>Produtos mais vendidos</div><div class='ord-sub'>Ordenado por unidades vendidas e faturação</div></div></div>"
-        + buildRankingRows(topProducts, "Ainda não há dados de produtos.", function(item, index){
-          return "<div class='stats-row'>"
-            + "<div class='stats-rank'>" + (index + 1) + "</div>"
-            + "<div class='stats-main'>"
-              + "<div class='stats-name'>" + escH(item.ref) + " - " + escH(item.name || item.ref) + "</div>"
-              + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades &middot; " + escH(item.ordersCount || 0) + " encomendas" + (item.type ? " &middot; " + escH(item.type) : "") + "</div>"
-            + "</div>"
-            + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
-          + "</div>";
-        })
+      + "<div class='stats-panel stats-panel-wide'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Resumo do catálogo</div><div class='ord-sub'>Sazonalidade, tamanhos e estado dos produtos</div></div></div>"
+        + "<div class='stats-mini-grid'>"
+          + "<div class='stats-mini'><strong>" + (catalog.activeProducts || 0) + "</strong><span>Ativos</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.inactiveProducts || 0) + "</strong><span>Inativos</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.winterProducts || 0) + "</strong><span>Inverno</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.summerProducts || 0) + "</strong><span>Verão</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.allSeasonProducts || 0) + "</strong><span>Ambos</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.step1Products || 0) + "/" + (catalog.step12Products || 0) + "</strong><span>Qtd. 1 / 12</span></div>"
+        + "</div>"
       + "</div>"
-      + "<div class='stats-panel'>"
-        + "<div class='stats-panel-head'><div><div class='ord-title'>Clientes com mais faturação</div><div class='ord-sub'>Total faturado por cliente</div></div></div>"
-        + buildRankingRows(topCustomers, "Ainda não há dados de clientes.", function(item, index){
-          var who = item.name || item.user || "Cliente";
+      + "<div class='stats-panel stats-panel-wide'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Atividade recente</div><div class='ord-sub'>Movimento do site e do login</div></div></div>"
+        + "<div class='stats-mini-grid'>"
+          + "<div class='stats-mini'><strong>" + (summary.orders7d || 0) + "</strong><span>Encomendas 7 dias</span></div>"
+          + "<div class='stats-mini'><strong>" + (summary.orders30d || 0) + "</strong><span>Encomendas 30 dias</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.logins7d || 0) + "</strong><span>Logins 7 dias</span></div>"
+          + "<div class='stats-mini'><strong>" + (catalog.logins30d || 0) + "</strong><span>Logins 30 dias</span></div>"
+          + "<div class='stats-mini'><strong>" + (summary.emailsSent || 0) + "</strong><span>Emails enviados</span></div>"
+          + "<div class='stats-mini'><strong>" + (summary.emailsFailed || 0) + "</strong><span>Emails falhados</span></div>"
+        + "</div>"
+      + "</div>"
+      + buildOrderedListSection("Produtos mais vendidos", "Unidades vendidas e faturação por artigo", topProducts, "Ainda não há dados de produtos.", function(item, index){
+        return "<div class='stats-row'>"
+          + "<div class='stats-rank'>" + (index + 1) + "</div>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(item.ref) + " - " + escH(item.name || item.ref) + "</div>"
+            + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades · " + escH(item.ordersCount || 0) + " encomendas" + (item.type ? " · " + escH(item.type) : "") + "</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + buildOrderedListSection("Clientes com mais compras", "Total faturado por cliente", topCustomers, "Ainda não há dados de clientes.", function(item, index){
+        var who = item.name || item.user || "Cliente";
+        return "<div class='stats-row'>"
+          + "<div class='stats-rank'>" + (index + 1) + "</div>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(who) + "</div>"
+            + "<div class='stats-meta'>" + escH(item.ordersCount || 0) + " encomendas · " + escH(item.unitsSold || 0) + " unidades" + (item.email ? " · " + escH(item.email) : "") + "</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + buildOrderedListSection("Categorias mais vendidas", "Agrupadas pela categoria real do produto", topCategories, "Ainda não há dados de categorias.", function(item, index){
+        return "<div class='stats-row'>"
+          + "<div class='stats-rank'>" + (index + 1) + "</div>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(item.category) + "</div>"
+            + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades · " + escH(item.ordersCount || 0) + " encomendas</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + buildOrderedListSection("Cores mais pedidas", "Variações usadas nas encomendas", topColors, "Ainda não há dados de cores.", function(item, index){
+        return "<div class='stats-row'>"
+          + "<div class='stats-rank'>" + (index + 1) + "</div>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(item.color) + "</div>"
+            + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades · " + escH(item.ordersCount || 0) + " encomendas</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + buildOrderedListSection("Tamanhos mais pedidos", "Distribuição por tamanho", topSizes, "Ainda não há dados de tamanhos.", function(item, index){
+        return "<div class='stats-row'>"
+          + "<div class='stats-rank'>" + (index + 1) + "</div>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(item.size) + "</div>"
+            + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades · " + escH(item.ordersCount || 0) + " encomendas</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + buildOrderedListSection("Evolução mensal", "Últimos 6 meses", monthly, "Ainda não há dados mensais.", function(item, index){
+        var max = 1;
+        for(var i=0;i<monthly.length;i++){
+          max = Math.max(max, Number(monthly[i].billedTotal || 0));
+        }
+        var pct = Math.max(6, Math.round(((Number(item.billedTotal || 0) / max) * 100)));
+        return "<div class='stats-row stats-row-graph'>"
+          + "<div class='stats-main'>"
+            + "<div class='stats-name'>" + escH(item.label || item.key || "") + "</div>"
+            + "<div class='stats-bar'><span style='width:" + pct + "%'></span></div>"
+            + "<div class='stats-meta'>" + escH(item.ordersCount || 0) + " encomendas · " + escH(item.unitsSold || 0) + " unidades</div>"
+          + "</div>"
+          + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+        + "</div>";
+      })
+      + "<div class='stats-panel stats-panel-wide'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Últimas encomendas</div><div class='ord-sub'>Entrada recente no sistema</div></div></div>"
+        + buildRankingRows(recentOrders, "Ainda não há encomendas recentes.", function(item, index){
           return "<div class='stats-row'>"
             + "<div class='stats-rank'>" + (index + 1) + "</div>"
             + "<div class='stats-main'>"
-              + "<div class='stats-name'>" + escH(who) + "</div>"
-              + "<div class='stats-meta'>" + escH(item.ordersCount || 0) + " encomendas &middot; " + escH(item.unitsSold || 0) + " unidades" + (item.email ? " &middot; " + escH(item.email) : "") + "</div>"
+              + "<div class='stats-name'>" + escH(item.publicNumber || ("#" + item.id)) + "</div>"
+              + "<div class='stats-meta'>" + escH(item.client || "Cliente") + " · " + escH(formatDateTime(item.createdAt)) + " · " + escH(item.orderStatus || "created") + " / " + escH(item.emailStatus || "pending") + "</div>"
             + "</div>"
-            + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+            + "<div class='stats-value'>" + formatMoney(item.total || 0) + "</div>"
           + "</div>";
         })
       + "</div>"
       + "<div class='stats-panel stats-panel-wide'>"
-        + "<div class='stats-panel-head'><div><div class='ord-title'>Top 10 encomendas</div><div class='ord-sub'>As encomendas com maior valor total</div></div></div>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Encomendas de maior valor</div><div class='ord-sub'>As mais faturadas do histórico</div></div></div>"
         + buildRankingRows(topOrders, "Ainda não há encomendas.", function(item, index){
           return "<div class='stats-row'>"
             + "<div class='stats-rank'>" + (index + 1) + "</div>"
             + "<div class='stats-main'>"
               + "<div class='stats-name'>" + escH(item.publicNumber || ("#" + item.id)) + "</div>"
-              + "<div class='stats-meta'>" + escH(item.client || "Cliente") + " &middot; " + escH(item.units || 0) + " unidades &middot; " + escH(item.lines || 0) + " linhas</div>"
+              + "<div class='stats-meta'>" + escH(item.client || "Cliente") + " · " + escH(item.units || 0) + " unidades · " + escH(item.lines || 0) + " linhas</div>"
             + "</div>"
             + "<div class='stats-value'>" + formatMoney(item.total || 0) + "</div>"
           + "</div>";
