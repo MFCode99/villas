@@ -15,6 +15,8 @@ function ensureCatalogReadyOnStartup(){
     .catch(function(){});
 }
 
+var ADMIN_STATS = null;
+
 setTimeout(function(){
   try{
     var savedToken = sessionStorage.getItem("villas_token") || localStorage.getItem("villas_token");
@@ -591,6 +593,7 @@ function areaTabsMarkup(isAdmin){
   return "<div class='area-tabs'>"
     + "<button class='area-tab" + (areaTab==="clientes"?" on":"") + "' data-area-tab='clientes'>Clientes</button>"
     + "<button class='area-tab" + (areaTab==="encomendas"?" on":"") + "' data-area-tab='encomendas'>Encomendas</button>"
+    + "<button class='area-tab" + (areaTab==="estatisticas"?" on":"") + "' data-area-tab='estatisticas'>Estatísticas</button>"
     + "</div>";
 }
 
@@ -723,8 +726,87 @@ function buildAdminOrdersSection(){
     + (list.length ? "<div class='area-section'>" + list.map(function(order){ return buildOrderCard(order, { admin:true }); }).join("") + "</div>" : "<div class='area-empty'>Nao encontramos encomendas com esse filtro.</div>");
 }
 
+function buildMetricCard(value, label, sublabel, tone){
+  return "<div class='stats-metric" + (tone ? " " + tone : "") + "'>"
+    + "<div class='stats-metric-value'>" + value + "</div>"
+    + "<div class='stats-metric-label'>" + escH(label) + "</div>"
+    + (sublabel ? "<div class='stats-metric-sub'>" + escH(sublabel) + "</div>" : "")
+    + "</div>";
+}
+
+function buildRankingRows(items, emptyText, renderRow){
+  if(!items || !items.length){
+    return "<div class='area-empty'>" + escH(emptyText) + "</div>";
+  }
+  return "<div class='stats-ranking'>" + items.map(function(item, index){
+    return renderRow(item, index);
+  }).join("") + "</div>";
+}
+
+function buildAdminStatsSection(){
+  var stats = ADMIN_STATS || {};
+  var summary = stats.summary || {};
+  var topProducts = stats.topProducts || [];
+  var topCustomers = stats.topCustomers || [];
+  var topOrders = stats.topOrders || [];
+  var lastOrder = summary.lastOrderAt ? formatDateTime(summary.lastOrderAt) : "Sem dados";
+  return "<div class='area-section stats-shell'>"
+    + "<div class='stats-grid'>"
+      + buildMetricCard(summary.totalOrders || 0, "Total de encomendas", lastOrder, "accent")
+      + buildMetricCard(formatMoney(summary.totalBilled || 0), "Faturação total", "Valor acumulado em encomendas")
+      + buildMetricCard(summary.totalUnits || 0, "Unidades vendidas", "Quantidade total movimentada")
+      + buildMetricCard(summary.totalCustomers || 0, "Clientes ativos", "Clientes com encomendas")
+      + buildMetricCard(summary.emailsSent || 0, "Emails enviados", "Notificações de encomenda")
+      + buildMetricCard(summary.emailsFailed || 0, "Falhas de email", "Encomendas com aviso")
+    + "</div>"
+    + "<div class='stats-panels'>"
+      + "<div class='stats-panel'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Produtos mais vendidos</div><div class='ord-sub'>Ordenado por unidades vendidas e faturação</div></div></div>"
+        + buildRankingRows(topProducts, "Ainda não há dados de produtos.", function(item, index){
+          return "<div class='stats-row'>"
+            + "<div class='stats-rank'>" + (index + 1) + "</div>"
+            + "<div class='stats-main'>"
+              + "<div class='stats-name'>" + escH(item.ref) + " - " + escH(item.name || item.ref) + "</div>"
+              + "<div class='stats-meta'>" + escH(item.unitsSold || 0) + " unidades &middot; " + escH(item.ordersCount || 0) + " encomendas" + (item.type ? " &middot; " + escH(item.type) : "") + "</div>"
+            + "</div>"
+            + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+          + "</div>";
+        })
+      + "</div>"
+      + "<div class='stats-panel'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Clientes com mais faturação</div><div class='ord-sub'>Total faturado por cliente</div></div></div>"
+        + buildRankingRows(topCustomers, "Ainda não há dados de clientes.", function(item, index){
+          var who = item.name || item.user || "Cliente";
+          return "<div class='stats-row'>"
+            + "<div class='stats-rank'>" + (index + 1) + "</div>"
+            + "<div class='stats-main'>"
+              + "<div class='stats-name'>" + escH(who) + "</div>"
+              + "<div class='stats-meta'>" + escH(item.ordersCount || 0) + " encomendas &middot; " + escH(item.unitsSold || 0) + " unidades" + (item.email ? " &middot; " + escH(item.email) : "") + "</div>"
+            + "</div>"
+            + "<div class='stats-value'>" + formatMoney(item.billedTotal || 0) + "</div>"
+          + "</div>";
+        })
+      + "</div>"
+      + "<div class='stats-panel stats-panel-wide'>"
+        + "<div class='stats-panel-head'><div><div class='ord-title'>Top 10 encomendas</div><div class='ord-sub'>As encomendas com maior valor total</div></div></div>"
+        + buildRankingRows(topOrders, "Ainda não há encomendas.", function(item, index){
+          return "<div class='stats-row'>"
+            + "<div class='stats-rank'>" + (index + 1) + "</div>"
+            + "<div class='stats-main'>"
+              + "<div class='stats-name'>" + escH(item.publicNumber || ("#" + item.id)) + "</div>"
+              + "<div class='stats-meta'>" + escH(item.client || "Cliente") + " &middot; " + escH(item.units || 0) + " unidades &middot; " + escH(item.lines || 0) + " linhas</div>"
+            + "</div>"
+            + "<div class='stats-value'>" + formatMoney(item.total || 0) + "</div>"
+          + "</div>";
+        })
+      + "</div>"
+    + "</div>"
+  + "</div>";
+}
+
 function buildAdminExtraSection(){
   if(areaTab === "clientes") return buildClientsSection();
+  if(areaTab === "estatisticas") return buildAdminStatsSection();
   return buildAdminOrdersSection();
 }
 
@@ -742,6 +824,8 @@ function renderAdminPanel(){
     bindAreaPanelEvents();
     if(areaTab === "clientes"){
       renderAdminClients();
+    } else if(areaTab === "estatisticas"){
+      renderAdminStats();
     } else {
       renderAdminOrders();
     }
@@ -820,6 +904,24 @@ function renderAdminOrders(){
   })
   .catch(function(){
     body.innerHTML = areaTabsMarkup(true) + "<div class='area-empty'>Nao foi possivel carregar as encomendas.</div>";
+    bindAreaPanelEvents();
+  });
+}
+
+function renderAdminStats(){
+  var body = document.getElementById("abody");
+  fetch(BASE_URL + "/admin/estatisticas", {
+    headers: { "X-Token": authToken||"" }
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    if(!res.ok || !res.estatisticas) throw new Error(res.message || "Nao foi possivel carregar as estatísticas.");
+    ADMIN_STATS = res.estatisticas;
+    body.innerHTML = areaTabsMarkup(true) + buildAdminStatsSection();
+    bindAreaPanelEvents();
+  })
+  .catch(function(){
+    body.innerHTML = areaTabsMarkup(true) + "<div class='area-empty'>Nao foi possivel carregar as estatísticas.</div>";
     bindAreaPanelEvents();
   });
 }

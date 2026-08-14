@@ -950,6 +950,108 @@ async function listAllOrders() {
   return rows.map(mapOrderRow);
 }
 
+async function getAdminStats() {
+  const [[summaryRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS total_orders,
+       COALESCE(SUM(total), 0) AS total_billed,
+       COALESCE(SUM(unidades), 0) AS total_units,
+       COALESCE(SUM(linhas), 0) AS total_lines,
+       COUNT(DISTINCT cliente_id) AS total_customers,
+       COALESCE(SUM(CASE WHEN email_status='sent' THEN 1 ELSE 0 END), 0) AS emails_sent,
+       COALESCE(SUM(CASE WHEN email_status='failed' THEN 1 ELSE 0 END), 0) AS emails_failed,
+       MAX(criado_em) AS last_order_at
+     FROM encomendas`
+  );
+
+  const [topProductsRows] = await db.execute(
+    `SELECT
+       el.ref,
+       MAX(el.nome) AS nome,
+       MAX(el.tipo) AS tipo,
+       SUM(el.quantidade) AS units_sold,
+       COALESCE(SUM(el.total_linha), 0) AS billed_total,
+       COUNT(DISTINCT el.encomenda_id) AS orders_count
+     FROM encomenda_linhas el
+     GROUP BY el.ref
+     ORDER BY units_sold DESC, billed_total DESC, el.ref ASC
+     LIMIT 10`
+  );
+
+  const [topCustomersRows] = await db.execute(
+    `SELECT
+       COALESCE(c.id, 0) AS id,
+       COALESCE(NULLIF(c.nome, ''), e.cliente_nome) AS nome,
+       COALESCE(c.user, '') AS user,
+       COALESCE(c.email, '') AS email,
+       COALESCE(c.telefone, '') AS telefone,
+       COUNT(e.id) AS orders_count,
+       COALESCE(SUM(e.total), 0) AS billed_total,
+       COALESCE(SUM(e.unidades), 0) AS units_sold,
+       MAX(e.criado_em) AS last_order_at
+     FROM encomendas e
+     LEFT JOIN clientes c ON c.id = e.cliente_id
+     GROUP BY c.id, c.nome, c.user, c.email, c.telefone, e.cliente_nome
+     ORDER BY billed_total DESC, orders_count DESC, nome ASC
+     LIMIT 10`
+  );
+
+  const [topOrdersRows] = await db.execute(
+    `SELECT
+       e.id,
+       e.public_number,
+       e.cliente_nome,
+       e.total,
+       e.unidades,
+       e.linhas,
+       e.criado_em
+     FROM encomendas e
+     ORDER BY e.total DESC, e.criado_em DESC
+     LIMIT 10`
+  );
+
+  return {
+    summary: {
+      totalOrders: Number(summaryRow.total_orders || 0),
+      totalBilled: Number(summaryRow.total_billed || 0),
+      totalUnits: Number(summaryRow.total_units || 0),
+      totalLines: Number(summaryRow.total_lines || 0),
+      totalCustomers: Number(summaryRow.total_customers || 0),
+      emailsSent: Number(summaryRow.emails_sent || 0),
+      emailsFailed: Number(summaryRow.emails_failed || 0),
+      lastOrderAt: summaryRow.last_order_at || null
+    },
+    topProducts: topProductsRows.map((row) => ({
+      ref: row.ref,
+      name: row.nome || row.ref,
+      type: row.tipo || '',
+      unitsSold: Number(row.units_sold || 0),
+      billedTotal: Number(row.billed_total || 0),
+      ordersCount: Number(row.orders_count || 0)
+    })),
+    topCustomers: topCustomersRows.map((row) => ({
+      id: Number(row.id || 0),
+      name: row.nome || row.user || 'Cliente',
+      user: row.user || '',
+      email: row.email || '',
+      telefone: row.telefone || '',
+      ordersCount: Number(row.orders_count || 0),
+      billedTotal: Number(row.billed_total || 0),
+      unitsSold: Number(row.units_sold || 0),
+      lastOrderAt: row.last_order_at || null
+    })),
+    topOrders: topOrdersRows.map((row) => ({
+      id: Number(row.id || 0),
+      publicNumber: row.public_number || buildPublicOrderNumber(row.id, row.criado_em),
+      client: row.cliente_nome || '',
+      total: Number(row.total || 0),
+      units: Number(row.unidades || 0),
+      lines: Number(row.linhas || 0),
+      createdAt: row.criado_em || null
+    }))
+  };
+}
+
 
 function sendJSON(res, code, data) {
   res.writeHead(code, { 'Content-Type':'application/json; charset=utf-8' });
@@ -2107,6 +2209,12 @@ async function handleRequest(req, res) {
     requireSession(req, true);
     const encomendas = await listAllOrders();
     return sendJSON(res, 200, { ok:true, encomendas });
+  }
+
+  if (req.method==='GET' && url==='/admin/estatisticas') {
+    requireSession(req, true);
+    const estatisticas = await getAdminStats();
+    return sendJSON(res, 200, { ok:true, estatisticas });
   }
 
   if (req.method==='GET' && url==='/admin/notificacoes') {
