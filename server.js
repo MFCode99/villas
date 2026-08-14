@@ -443,49 +443,67 @@ function buildOrderHTML(order, opts = {}) {
     return row;
   }).join('');
   const notesHtml = notes
-    ? `<div style='background:#fffdf0;border:1px solid #e8d08a;border-radius:4px;padding:10px 14px;margin-bottom:18px;font-size:12px'><strong style='font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;display:block;margin-bottom:4px'>Notas</strong>${notes}</div>`
+    ? `<div class="notes-box"><div class="label">Notas</div><div class="value">${notes}</div></div>`
     : '';
   const priceHeadHtml = hidePrices
     ? ''
-    : "<th style='color:#6c6458;padding:8px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:1px'>P.Unit.</th>"
-      + "<th style='color:#6c6458;padding:8px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Total</th>";
+    : "<th>P.Unit.</th><th>Total</th>";
   const unitsTopHtml = hidePrices
     ? ''
-    : "<div class='meta-card'><span class='meta-label'>Unidades</span><span class='meta-value'>" + units + "</span></div>";
+    : "";
   const totalsHtml = hidePrices
-    ? "<div style='text-align:right;padding:12px 0;border-top:2px solid #c9a84c;margin-bottom:20px'>"
-      + "<div style='font-size:11px;color:#888;margin-top:2px'>" + lines + " linhas</div>"
-      + "</div>"
-    : "<div style='text-align:right;padding:12px 0;border-top:2px solid #c9a84c;margin-bottom:20px'>"
-      + "<div style='font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px'>Total (preço de custo)</div>"
-      + "<div style='font-size:22px;font-weight:700'>" + parseFloat(total).toFixed(2).replace('.', ',') + " &euro;</div>"
-      + "<div style='font-size:11px;color:#888;margin-top:2px'>" + units + " unidades &middot; " + lines + " linhas</div>"
-      + "</div>";
+    ? "<div class='totals'><div class='totals-line'>" + lines + " linhas</div></div>"
+    : "<div class='totals'><div class='totals-label'>Total</div><div class='totals-value'>" + parseFloat(total).toFixed(2).replace('.', ',') + " &euro;</div><div class='totals-line'>" + units + " unidades &middot; " + lines + " linhas</div></div>";
   return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Encomenda Villas</title>"
     + "<style>"
     + "*{box-sizing:border-box;margin:0;padding:0}"
     + "@page{size:A4;margin:16mm 10mm 16mm 10mm}"
-    + "body{font-family:Arial,sans-serif;color:#0f0f0f;padding:0;margin:0;background:#fff}"
+    + "body{font-family:Arial,sans-serif;color:#111;padding:0;margin:0;background:#fff}"
     + "table{width:100%;border-collapse:collapse;margin-bottom:16px}"
     + "thead{display:table-header-group}"
     + "tr{page-break-inside:avoid}"
     + ".doc-shell{padding:0 0 6mm}"
-    + ".prtbtn{display:block;margin:0 auto;background:#c9a84c;color:#0f0f0f;border:none;padding:12px 40px;font-size:14px;font-weight:700;border-radius:4px;cursor:pointer}"
+    + ".prtbtn{display:block;margin:0 auto;background:#111;color:#fff;border:none;padding:12px 40px;font-size:14px;font-weight:700;border-radius:4px;cursor:pointer}"
     + "@media print{.prtbtn{display:none}}"
-    + ".brand{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding:18px 20px;border:1px solid #e4dccd;border-radius:18px;background:linear-gradient(180deg,#fffdf8 0%,#f7f1e8 100%);box-shadow:0 10px 26px rgba(15,15,15,.05)}"
-    + ".brand-logo{width:58px;height:58px;flex:0 0 58px;border-radius:16px;box-shadow:0 8px 18px rgba(15,15,15,.12)}"
-    + ".brand-copy{flex:1;min-width:0}"
-    + ".brand-kicker{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#8a8175;margin-bottom:4px}"
-    + ".brand-title{font-family:Georgia,serif;font-size:28px;line-height:1;color:#111;margin:0}"
-    + ".brand-sub{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a8175;margin-top:4px}"
-    + ".meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}"
-    + ".meta-card{background:#fff;border:1px solid #e4dccd;border-radius:12px;padding:10px 12px;min-height:58px}"
-    + ".meta-label{display:block;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:#8a8175;margin-bottom:4px}"
-    + ".meta-value{font-size:13px;font-weight:700;color:#111;word-break:break-word}"
-    + ".section-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#8a8175;margin:18px 0 10px}"
+    + ".brand{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #111;margin-bottom:16px}"
+    + ".brand-left{display:flex;align-items:center;gap:12px;min-width:0}"
+    + ".brand-logo{width:44px;height:44px;flex:0 0 44px;border-radius:10px;display:block}"
+    + ".brand-copy{min-width:0}"
+    + ".brand-kicker{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#666;margin-bottom:3px}"
+    + ".brand-title{font-family:Georgia,serif;font-size:25px;line-height:1;color:#111;margin:0}"
+    + ".brand-sub{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:#666;margin-top:4px}"
+    + ".brand-right{min-width:220px;text-align:right;display:grid;gap:6px}"
+    + ".brand-item{display:flex;justify-content:space-between;gap:14px;font-size:11px;line-height:1.35}"
+    + ".brand-item .label,.notes-box .label,.totals-label{font-size:9px;letter-spacing:1.3px;text-transform:uppercase;color:#666}"
+    + ".brand-item .value,.notes-box .value,.totals-value{font-size:12px;font-weight:700;color:#111}"
+    + ".info-table{width:100%;margin:0 0 16px;border:1px solid #d9d9d9}"
+    + ".info-table th,.info-table td{padding:8px 10px;border-right:1px solid #d9d9d9;border-bottom:1px solid #d9d9d9;font-size:11px;text-align:left;vertical-align:top}"
+    + ".info-table th{width:14%;background:#f5f5f5;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#666}"
+    + ".info-table td{width:36%;color:#111}"
+    + ".info-table tr:last-child th,.info-table tr:last-child td{border-bottom:none}"
+    + ".info-table th:last-child,.info-table td:last-child{border-right:none}"
+    + ".notes-box{border:1px solid #d9d9d9;padding:10px 12px;margin-bottom:14px}"
+    + ".notes-box .label{margin-bottom:4px}"
+    + ".notes-box .value{font-size:11px;font-weight:400;line-height:1.55}"
+    + ".section-title{font-size:9px;letter-spacing:2.2px;text-transform:uppercase;color:#666;margin:16px 0 8px}"
+    + ".order-table{margin-bottom:14px}"
+    + ".order-table thead tr{background:#111;border-top:1px solid #111;border-bottom:1px solid #111}"
+    + ".order-table th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#fff;font-weight:700;border-right:1px solid rgba(255,255,255,.14)}"
+    + ".order-table th:last-child{border-right:none}"
+    + ".order-table td{padding:7px 10px;border-bottom:1px solid #e5e5e5;font-size:11px}"
+    + ".order-table tbody tr:nth-child(even){background:#fafafa}"
+    + ".order-table tbody tr:last-child td{border-bottom:none}"
+    + ".order-table td:last-child{text-align:right}"
+    + ".order-table td.center{text-align:center}"
+    + ".order-table td.ref{font-weight:700}"
+    + ".order-table td.type{color:#666}"
+    + ".totals{margin-top:8px;padding-top:10px;border-top:1px solid #111;text-align:right}"
+    + ".totals-value{font-size:20px;margin:2px 0 4px}"
+    + ".totals-line{font-size:10px;color:#666}"
     + "</style></head><body>"
     + "<div class='doc-shell'>"
     + "<div class='brand'>"
+    + "<div class='brand-left'>"
     + "<img class='brand-logo' src='" + logoUri + "' alt='Villas'>"
     + "<div class='brand-copy'>"
     + "<div class='brand-kicker'>Nota de Encomenda</div>"
@@ -493,28 +511,29 @@ function buildOrderHTML(order, opts = {}) {
     + "<div class='brand-sub'>Outono/Inverno 2025&middot;2026</div>"
     + "</div>"
     + "</div>"
-    + "<div class='meta-grid'>"
-    + "<div class='meta-card'><span class='meta-label'>Número</span><span class='meta-value'>" + publicNumber + "</span></div>"
-    + "<div class='meta-card'><span class='meta-label'>Cliente</span><span class='meta-value'>" + (client || "&mdash;") + "</span></div>"
-    + "<div class='meta-card'><span class='meta-label'>NIF</span><span class='meta-value'>" + (nif || "&mdash;") + "</span></div>"
-    + "<div class='meta-card'><span class='meta-label'>Data</span><span class='meta-value'>" + date + " " + time + "</span></div>"
-    + unitsTopHtml
+    + "<div class='brand-right'>"
+    + "<div class='brand-item'><span class='label'>Número</span><span class='value'>" + publicNumber + "</span></div>"
+    + "<div class='brand-item'><span class='label'>Data</span><span class='value'>" + date + " " + time + "</span></div>"
     + "</div>"
+    + "</div>"
+    + "<table class='info-table'><tbody>"
+    + "<tr><th>Cliente</th><td>" + (client || "&mdash;") + "</td><th>NIF</th><td>" + (nif || "&mdash;") + "</td></tr>"
+    + "<tr><th>Unidades</th><td>" + units + "</td><th>Linhas</th><td>" + lines + "</td></tr>"
+    + "</tbody></table>"
     + notesHtml
     + "<div class='section-title'>Linhas da Encomenda</div>"
-    + "<table><thead><tr style='background:#f7f4ef;border-top:1px solid #e2ddd5;border-bottom:1px solid #e2ddd5'>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Ref.</th>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Descrição</th>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Tipo</th>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Cor</th>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Tam.</th>"
-    + "<th style='color:#6c6458;padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:1px'>Qtd.</th>"
+    + "<table class='order-table'><thead><tr>"
+    + "<th>Ref.</th>"
+    + "<th>Descrição</th>"
+    + "<th>Tipo</th>"
+    + "<th>Cor</th>"
+    + "<th>Tam.</th>"
+    + "<th>Qtd.</th>"
     + priceHeadHtml
     + "</tr></thead><tbody>" + rows + "</tbody></table>"
     + totalsHtml
-    + "<div style='font-size:10px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px;margin-bottom:20px'>VÍTOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</div>"
+    + "<div style='font-size:10px;color:#666;text-align:center;border-top:1px solid #ddd;padding-top:10px;margin-bottom:20px'>VÍTOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</div>"
     + "</div>"
-    + "<button class='prtbtn' onclick='window.print()'>\uD83D\uDDA8 IMPRIMIR</button>"
     + "</body></html>";
 }
 
@@ -530,19 +549,19 @@ async function generatePDF(html) {
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: `
-        <div style="width:100%;padding:0 10mm;font-size:9px;color:#8a8175;text-transform:uppercase;letter-spacing:1.2px;font-family:Arial,sans-serif;">
-          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-bottom:1px solid #e9e1d4;padding:0 0 4px;gap:12px;">
-            <span style="display:flex;align-items:center;gap:8px;">
-              <img src="${getVillasLogoDataUri()}" alt="Villas" style="width:18px;height:18px;border-radius:5px;display:block;">
-              <span>Villas&reg; Nota de Encomenda</span>
+        <div style="width:100%;padding:0 10mm;font-size:9px;color:#666;font-family:Arial,sans-serif;">
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-bottom:1px solid #d9d9d9;padding:0 0 4px;gap:12px;">
+            <span style="display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:1px;">
+              <img src="${getVillasLogoDataUri()}" alt="Villas" style="width:16px;height:16px;border-radius:4px;display:block;">
+              <span>Villas - Nota de Encomenda</span>
             </span>
             <span style="text-transform:none;letter-spacing:0;">${new Date().toLocaleDateString('pt-PT')}</span>
           </div>
         </div>
       `,
       footerTemplate: `
-        <div style="width:100%;padding:0 10mm 2px;font-size:9px;color:#8a8175;font-family:Arial,sans-serif;">
-          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-top:1px solid #e9e1d4;padding-top:4px;">
+        <div style="width:100%;padding:0 10mm 2px;font-size:9px;color:#666;font-family:Arial,sans-serif;">
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;border-top:1px solid #d9d9d9;padding-top:4px;">
             <span>VÍTOR GOUVEIA &middot; +351 968 350 394 &middot; Vitormbgouveia@gmail.com</span>
             <span>Página <span class="pageNumber"></span> / <span class="totalPages"></span></span>
           </div>
