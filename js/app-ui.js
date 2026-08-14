@@ -686,7 +686,10 @@ function buildUserOrdersSection(){
 }
 
 function buildClientsSection(){
-  return renderForm(editingIdx >= 0 ? CLIENTS[editingIdx] : null) +
+  return "<div style='display:flex;justify-content:flex-end;margin-bottom:12px;'>" +
+    (editingIdx < 0 ? "<button class='abtn-new' id='abtn-new' style='width:auto;min-height:42px;padding:0 16px;border-radius:999px;'>+ Novo Cliente</button>" : "") +
+    "</div>" +
+    renderForm(editingIdx >= 0 ? CLIENTS[editingIdx] : null) +
     "<div style='margin-bottom:6px;'>" +
     CLIENTS.map(function(c,i){
       return "<div class='cl-item'>"
@@ -700,7 +703,7 @@ function buildClientsSection(){
         + (!c.admin ? "<button class='cl-del' data-di='" + i + "'>&#128465;</button>" : "")
         + "</div>";
     }).join("") + "</div>" +
-    (editingIdx < 0 ? "<button class='abtn-new' id='abtn-new'>+ Novo Cliente</button>" : "");
+    "";
 }
 
 function buildAdminOrdersSection(){
@@ -1086,16 +1089,6 @@ function bindAreaPanelEvents(){
     if(e.target && e.target.id === "abtn-new"){
       editingIdx = -2;
       renderAdminPanel();
-      return;
-    }
-    if(e.target && e.target.id === "afrm-cancel"){
-      editingIdx = -1;
-      renderAdminPanel();
-      return;
-    }
-    if(e.target && e.target.id === "afrm-save"){
-      e.preventDefault();
-      saveClientForm();
       return;
     }
   });

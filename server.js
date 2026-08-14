@@ -2142,21 +2142,34 @@ async function handleRequest(req, res) {
   // Admin â€” criar cliente
   if (req.method==='POST' && url==='/admin/clientes') {
     requireSession(req, true);
-    if (!data.user||!data.pass||!data.nome) return sendJSON(res,400,{ok:false,message:'user, pass e nome são obrigatórios'});
+    const user = String(data.user || '').trim().toLowerCase();
+    const pass = String(data.pass || '').trim();
+    const nome = String(data.nome || '').trim();
+    const nif = String(data.nif || '').trim();
+    const email = String(data.email || '').trim();
+    const telefone = String(data.telefone || '').trim();
+    if (!user||!pass||!nome) return sendJSON(res,400,{ok:false,message:'user, pass e nome são obrigatórios'});
     try {
+      const [existingRows] = await db.execute(
+        'SELECT id FROM clientes WHERE LOWER(TRIM(user))=? LIMIT 1',
+        [user]
+      );
+      if (existingRows.length) {
+        return sendJSON(res,400,{ok:false,message:'Utilizador já existe'});
+      }
       const [r] = await db.execute(
         'INSERT INTO clientes (user,pass,nome,nif,email,telefone) VALUES (?,?,?,?,?,?)',
-        [data.user.toLowerCase(), data.pass, data.nome, data.nif||'', data.email||'', data.telefone||'']
+        [user, pass, nome, nif, email, telefone]
       );
-      if (data.email) {
+      if (email) {
         try {
           const welcome = buildNewClientWelcomeEmail({
-            user: data.user.toLowerCase(),
-            pass: data.pass,
-            nome: data.nome
+            user,
+            pass,
+            nome
           });
           await sendClientEmail({
-            to: data.email,
+            to: email,
             subject: welcome.subject,
             message: welcome.message,
             html: welcome.html
